@@ -1,0 +1,11 @@
+# Go build outputs
+/main
+/pipery
+*.test
+*.out
+
+# Local runtime artifacts
+/pipery.jsonl
+
+# Editor / OS noise
+.DS_Store
