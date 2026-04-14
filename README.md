@@ -20,18 +20,12 @@ It supports:
 go build ./cmd/pipery
 ```
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 Container image:
 
 ```bash
 docker build -t pipery:base .
 ```
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 GitHub Actions:
 
 - Runs lint, tests, Go build, and Docker build on pushes and pull requests
@@ -39,12 +33,6 @@ GitHub Actions:
 - Publishes the Docker image to `ghcr.io/<owner>/<repo>:0.1.0`, `:v0.1.0`, and `:latest` on pushes to `main`
 - Creates a GitHub release and uploads a Linux AMD64 tarball on pushes to `main`
 
-=======
->>>>>>> 2e9a620 (Add Debian slim base image for pipery)
-=======
->>>>>>> acb4ed1 (Add docs and ignore local artifacts)
-=======
->>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 ## Usage
 
 Interactive mode:
@@ -73,10 +61,6 @@ Run a program directly:
 ./pipery -- ls -la
 ```
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 Run from Docker:
 
 ```bash
@@ -84,8 +68,6 @@ docker run --rm -i -v "$PWD:/workspace" pipery:base -c "echo hello"
 echo "echo hi" | docker run --rm -i -v "$PWD:/workspace" pipery:base
 ```
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 Published image tags use the repo version:
 
 ```bash
@@ -94,12 +76,6 @@ docker pull ghcr.io/<owner>/<repo>:v0.1.0
 docker pull ghcr.io/<owner>/<repo>:latest
 ```
 
-=======
->>>>>>> 2e9a620 (Add Debian slim base image for pipery)
-=======
->>>>>>> acb4ed1 (Add docs and ignore local artifacts)
-=======
->>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 Log to a file and syslog:
 
 ```bash
@@ -118,11 +94,7 @@ printf 'hello\n' | ./pipery -c "cat"
 Use a YAML config file:
 
 ```bash
-<<<<<<< HEAD
 ./pipery -config ./.pipery/config.yaml
-=======
-./pipery -config ./pipery.yaml
->>>>>>> acb4ed1 (Add docs and ignore local artifacts)
 ```
 
 Or environment variables:
@@ -145,12 +117,8 @@ Configuration is loaded in this order:
 
 If you do not pass `-config`, pipery automatically looks for `./pipery.yaml` or `./pipery.yml`.
 
-<<<<<<< HEAD
 If you do not pass `-config`, pipery automatically looks for `./.pipery/config.yaml`.
 Example `./.pipery/config.yaml`:
-=======
-Example `pipery.yaml`:
->>>>>>> acb4ed1 (Add docs and ignore local artifacts)
 
 ```yaml
 log_file: ./pipery.jsonl
@@ -243,6 +211,7 @@ Each command produces one JSON object per line. Example:
 - A local `pipery.jsonl` file is created by default, so logging works even with no extra configuration.
 - The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags.
 - The included `Dockerfile` builds a reusable Debian slim-based image with `pipery` installed at `/usr/local/bin/pipery`.
+- The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags.
 - With no command arguments, piped stdin is treated as a line-by-line command source.
 - Stdout and stderr are streamed to the terminal while also being captured for logging.
 - Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected.
