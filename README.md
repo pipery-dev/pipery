@@ -18,6 +18,12 @@ It supports:
 go build ./cmd/pipery
 ```
 
+Container image:
+
+```bash
+docker build -t pipery:base .
+```
+
 ## Usage
 
 Interactive mode:
@@ -44,6 +50,13 @@ Run a program directly:
 
 ```bash
 ./pipery -- ls -la
+```
+
+Run from Docker:
+
+```bash
+docker run --rm -i -v "$PWD:/workspace" pipery:base -c "echo hello"
+echo "echo hi" | docker run --rm -i -v "$PWD:/workspace" pipery:base
 ```
 
 Log to a file and syslog:
@@ -178,6 +191,7 @@ Each command produces one JSON object per line. Example:
 ## Notes
 
 - A local `pipery.jsonl` file is created by default, so logging works even with no extra configuration.
+- The included `Dockerfile` builds a reusable Debian slim-based image with `pipery` installed at `/usr/local/bin/pipery`.
 - With no command arguments, piped stdin is treated as a line-by-line command source.
 - Stdout and stderr are streamed to the terminal while also being captured for logging.
 - Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected.
