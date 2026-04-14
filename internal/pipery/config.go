@@ -1,0 +1,303 @@
+package pipery
+
+import (
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/spf13/viper"
+)
+
+// config stores all user-configurable runtime settings after loading defaults,
+// YAML config, environment variables, and CLI flags.
+type config struct {
+	ConfigFile      string
+	LogFile         string
+	SyslogTarget    string
+	SyslogTag       string
+	QueueSize       int
+	MaxCaptureBytes int
+	Shell           string
+	Prompt          string
+	FlushTimeout    time.Duration
+}
+
+// stringListFlag implements flag.Value for a repeatable string flag like:
+//
+//	-c "echo hi" -c "pwd"
+//
+// The standard flag package does not provide a built-in "repeatable string"
+// type, so we add this tiny adapter.
+type stringListFlag []string
+
+func (s *stringListFlag) String() string {
+	return strings.Join(*s, ", ")
+}
+
+func (s *stringListFlag) Set(value string) error {
+	// Every time -c appears, the flag package calls Set with one value.
+	*s = append(*s, value)
+	return nil
+}
+
+// flagOverrides keeps the raw CLI-provided values so they can be applied after
+// config files and environment variables have been loaded.
+type flagOverrides struct {
+	ConfigFile      string
+	LogFile         string
+	SyslogTarget    string
+	SyslogTag       string
+	QueueSize       int
+	MaxCaptureBytes int
+	Shell           string
+	Prompt          string
+	FlushTimeout    time.Duration
+}
+
+// parseArgs translates raw CLI arguments into a typed config plus the chosen
+// execution mode inputs.
+//
+// Configuration precedence is:
+// 1. built-in defaults
+// 2. YAML config file
+// 3. PIPERY_* environment variables
+// 4. CLI flags
+func parseArgs(args []string, output io.Writer) (config, []string, []string, bool, error) {
+	cfg := defaultConfig()
+
+	var commands stringListFlag
+	overrides := flagOverrides{}
+	flags := flag.NewFlagSet("pipery", flag.ContinueOnError)
+
+	// We suppress the flag package's default output because we want to control
+	// the help/error text ourselves and keep it consistent.
+	flags.SetOutput(io.Discard)
+	flags.Var(&commands, "c", "run a shell command (repeatable)")
+	flags.StringVar(&overrides.ConfigFile, "config", "", "path to a YAML config file")
+	flags.StringVar(&overrides.LogFile, "log-file", "", "path to the JSONL log file")
+	flags.StringVar(&overrides.SyslogTarget, "syslog", "", "network syslog target, for example udp://127.0.0.1:514")
+	flags.StringVar(&overrides.SyslogTag, "syslog-tag", "", "app tag to embed in syslog messages")
+	flags.IntVar(&overrides.QueueSize, "queue-size", 0, "size of the async log queue")
+	flags.IntVar(&overrides.MaxCaptureBytes, "max-capture-bytes", 0, "maximum bytes captured per stdin/stdout/stderr field")
+	flags.StringVar(&overrides.Shell, "shell", "", "shell used for -c commands and REPL execution")
+	flags.StringVar(&overrides.Prompt, "prompt", "", "interactive prompt")
+	flags.DurationVar(&overrides.FlushTimeout, "flush-timeout", 0, "maximum time to wait for async log flushing on exit")
+
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Fprint(output, usageText(cfg.Shell))
+			return cfg, nil, nil, true, nil
+		}
+		return cfg, nil, nil, false, err
+	}
+
+	var err error
+	cfg, err = loadConfig(overrides.ConfigFile)
+	if err != nil {
+		return cfg, nil, nil, false, err
+	}
+
+	applyFlagOverrides(flags, &cfg, overrides)
+
+	// These validation checks keep invalid config from reaching deeper layers
+	// where the failure would be harder to understand.
+	if cfg.QueueSize < 1 {
+		return cfg, nil, nil, false, errors.New("pipery: -queue-size must be at least 1")
+	}
+
+	if cfg.MaxCaptureBytes < 0 {
+		return cfg, nil, nil, false, errors.New("pipery: -max-capture-bytes must be zero or greater")
+	}
+
+	if cfg.FlushTimeout < 0 {
+		return cfg, nil, nil, false, errors.New("pipery: -flush-timeout must be zero or greater")
+	}
+
+	directCommand := flags.Args()
+	if len(commands) > 0 && len(directCommand) > 0 {
+		// Mixing the two modes is ambiguous, so we reject it early.
+		return cfg, nil, nil, false, errors.New("pipery: use either repeated -c commands or a direct command after --, not both")
+	}
+
+	return cfg, commands, directCommand, false, nil
+}
+
+// defaultConfig is the built-in configuration used when the user does not
+// provide any file, environment variables, or flags.
+func defaultConfig() config {
+	return config{
+		LogFile:         "pipery.jsonl",
+		SyslogTag:       "pipery",
+		QueueSize:       256,
+		MaxCaptureBytes: 256 * 1024,
+		Shell:           defaultShell(),
+		Prompt:          "pipery> ",
+		FlushTimeout:    3 * time.Second,
+	}
+}
+
+// loadConfig reads config values from an optional YAML file and PIPERY_*
+// environment variables.
+//
+// If no explicit config file is provided, we only look for ./pipery.yaml or
+// ./pipery.yml and simply continue if neither file exists.
+func loadConfig(configFile string) (config, error) {
+	cfg := defaultConfig()
+	v := viper.New()
+
+	v.SetEnvPrefix("PIPERY")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+	setViperDefaults(v, cfg)
+
+	if configFile != "" {
+		v.SetConfigFile(configFile)
+	} else {
+		discoveredConfig, err := discoverDefaultConfigFile(".")
+		if err != nil {
+			return cfg, err
+		}
+		if discoveredConfig != "" {
+			v.SetConfigFile(discoveredConfig)
+		}
+	}
+
+	if v.ConfigFileUsed() != "" || configFile != "" {
+		if err := v.ReadInConfig(); err != nil {
+			var missing viper.ConfigFileNotFoundError
+			if configFile != "" || !errors.As(err, &missing) {
+				return cfg, err
+			}
+		} else {
+			cfg.ConfigFile = v.ConfigFileUsed()
+		}
+	}
+
+	cfg.LogFile = v.GetString("log_file")
+	cfg.SyslogTarget = v.GetString("syslog")
+	cfg.SyslogTag = v.GetString("syslog_tag")
+	cfg.QueueSize = v.GetInt("queue_size")
+	cfg.MaxCaptureBytes = v.GetInt("max_capture_bytes")
+	cfg.Shell = v.GetString("shell")
+	cfg.Prompt = v.GetString("prompt")
+	cfg.FlushTimeout = v.GetDuration("flush_timeout")
+
+	if cfg.ConfigFile == "" && configFile != "" {
+		if resolved, err := filepath.Abs(configFile); err == nil {
+			cfg.ConfigFile = resolved
+		} else {
+			cfg.ConfigFile = configFile
+		}
+	}
+
+	return cfg, nil
+}
+
+// setViperDefaults registers the application's built-in defaults with viper.
+func setViperDefaults(v *viper.Viper, cfg config) {
+	v.SetDefault("log_file", cfg.LogFile)
+	v.SetDefault("syslog", cfg.SyslogTarget)
+	v.SetDefault("syslog_tag", cfg.SyslogTag)
+	v.SetDefault("queue_size", cfg.QueueSize)
+	v.SetDefault("max_capture_bytes", cfg.MaxCaptureBytes)
+	v.SetDefault("shell", cfg.Shell)
+	v.SetDefault("prompt", cfg.Prompt)
+	v.SetDefault("flush_timeout", cfg.FlushTimeout.String())
+}
+
+// applyFlagOverrides only copies flags that the user explicitly set. This keeps
+// zero values from accidentally wiping out config file or environment values.
+func applyFlagOverrides(flags *flag.FlagSet, cfg *config, overrides flagOverrides) {
+	flags.Visit(func(currentFlag *flag.Flag) {
+		switch currentFlag.Name {
+		case "config":
+			cfg.ConfigFile = overrides.ConfigFile
+		case "log-file":
+			cfg.LogFile = overrides.LogFile
+		case "syslog":
+			cfg.SyslogTarget = overrides.SyslogTarget
+		case "syslog-tag":
+			cfg.SyslogTag = overrides.SyslogTag
+		case "queue-size":
+			cfg.QueueSize = overrides.QueueSize
+		case "max-capture-bytes":
+			cfg.MaxCaptureBytes = overrides.MaxCaptureBytes
+		case "shell":
+			cfg.Shell = overrides.Shell
+		case "prompt":
+			cfg.Prompt = overrides.Prompt
+		case "flush-timeout":
+			cfg.FlushTimeout = overrides.FlushTimeout
+		}
+	})
+}
+
+// discoverDefaultConfigFile checks for the exact default YAML filenames we
+// support, instead of letting viper guess based on the basename alone.
+//
+// That matters because the repo also creates files like `pipery.jsonl`, and we
+// do not want to accidentally parse those as configuration.
+func discoverDefaultConfigFile(dir string) (string, error) {
+	candidates := []string{
+		filepath.Join(dir, "pipery.yaml"),
+		filepath.Join(dir, "pipery.yml"),
+	}
+
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err == nil {
+			if info.IsDir() {
+				return "", fmt.Errorf("pipery: config path %q is a directory, expected a file", candidate)
+			}
+			return candidate, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+	}
+
+	return "", nil
+}
+
+// usageText builds the help text shown for -h / -help.
+func usageText(shell string) string {
+	return fmt.Sprintf(`pipery mediates shell commands and records structured execution logs.
+
+Usage:
+  pipery
+  echo "echo Hi" | pipery
+  pipery -config ./pipery.yaml
+  pipery -c "echo hello"
+  pipery -c "cd /tmp" -c "pwd"
+  pipery -- ls -la
+
+Modes:
+  No command arguments starts a line-oriented REPL.
+  Piped stdin runs each incoming line as a command.
+  Repeated -c runs shell commands sequentially.
+  Arguments after -- execute a program directly.
+
+Logging:
+  Logs are written asynchronously as JSON lines.
+  The default file sink is ./pipery.jsonl.
+  Add -syslog udp://host:514 or -syslog tcp://host:514 to mirror logs to syslog.
+  Config can also come from pipery.yaml and PIPERY_* environment variables.
+
+Interactive built-ins:
+  cd [dir]
+  pwd
+  export KEY=VALUE
+  unset KEY
+  exit [code]
+  quit [code]
+
+Defaults:
+  shell: %s
+  env prefix: PIPERY_
+`, shell)
+}
