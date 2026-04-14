@@ -2,6 +2,8 @@
 
 `pipery` is a Go CLI that mediates shell command execution and records each run as structured JSON.
 
+Current version: `0.1.0` from [VERSION](/Users/hamed/src/github.com/pipery-dev/pipery/VERSION)
+
 It supports:
 
 - Interactive, line-oriented shell mode
@@ -23,6 +25,13 @@ Container image:
 ```bash
 docker build -t pipery:base .
 ```
+
+GitHub Actions:
+
+- Runs lint, tests, Go build, and Docker build on pushes and pull requests
+- Reads the release version from `VERSION`
+- Publishes the Docker image to `ghcr.io/<owner>/<repo>:0.1.0`, `:v0.1.0`, and `:latest` on pushes to `main`
+- Creates a GitHub release and uploads a Linux AMD64 tarball on pushes to `main`
 
 ## Usage
 
@@ -57,6 +66,14 @@ Run from Docker:
 ```bash
 docker run --rm -i -v "$PWD:/workspace" pipery:base -c "echo hello"
 echo "echo hi" | docker run --rm -i -v "$PWD:/workspace" pipery:base
+```
+
+Published image tags use the repo version:
+
+```bash
+docker pull ghcr.io/<owner>/<repo>:0.1.0
+docker pull ghcr.io/<owner>/<repo>:v0.1.0
+docker pull ghcr.io/<owner>/<repo>:latest
 ```
 
 Log to a file and syslog:
@@ -192,6 +209,7 @@ Each command produces one JSON object per line. Example:
 
 - A local `pipery.jsonl` file is created by default, so logging works even with no extra configuration.
 - The included `Dockerfile` builds a reusable Debian slim-based image with `pipery` installed at `/usr/local/bin/pipery`.
+- The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags.
 - With no command arguments, piped stdin is treated as a line-by-line command source.
 - Stdout and stderr are streamed to the terminal while also being captured for logging.
 - Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected.
