@@ -21,12 +21,16 @@ go build ./cmd/pipery
 ```
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 Container image:
 
 ```bash
 docker build -t pipery:base .
 ```
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 GitHub Actions:
 
@@ -39,6 +43,8 @@ GitHub Actions:
 >>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 =======
 >>>>>>> acb4ed1 (Add docs and ignore local artifacts)
+=======
+>>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 ## Usage
 
 Interactive mode:
@@ -68,6 +74,9 @@ Run a program directly:
 ```
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 Run from Docker:
 
 ```bash
@@ -75,6 +84,7 @@ docker run --rm -i -v "$PWD:/workspace" pipery:base -c "echo hello"
 echo "echo hi" | docker run --rm -i -v "$PWD:/workspace" pipery:base
 ```
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 Published image tags use the repo version:
 
@@ -88,6 +98,8 @@ docker pull ghcr.io/<owner>/<repo>:latest
 >>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 =======
 >>>>>>> acb4ed1 (Add docs and ignore local artifacts)
+=======
+>>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 Log to a file and syslog:
 
 ```bash
@@ -229,14 +241,8 @@ Each command produces one JSON object per line. Example:
 ## Notes
 
 - A local `pipery.jsonl` file is created by default, so logging works even with no extra configuration.
-<<<<<<< HEAD
-- The included `Dockerfile` builds a reusable Debian slim-based image with `pipery` installed at `/usr/local/bin/pipery`.
-<<<<<<< HEAD
 - The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags.
-=======
->>>>>>> 2e9a620 (Add Debian slim base image for pipery)
-=======
->>>>>>> acb4ed1 (Add docs and ignore local artifacts)
+- The included `Dockerfile` builds a reusable Debian slim-based image with `pipery` installed at `/usr/local/bin/pipery`.
 - With no command arguments, piped stdin is treated as a line-by-line command source.
 - Stdout and stderr are streamed to the terminal while also being captured for logging.
 - Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected.
