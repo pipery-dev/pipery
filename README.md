@@ -65,8 +65,16 @@ Run a program directly:
 Run from Docker:
 
 ```bash
-docker run --rm -i -v "$PWD:/workspace" psh:base -c "echo hello"
-echo "echo hi" | docker run --rm -i -v "$PWD:/workspace" psh:base
+docker run --rm -i -v "$PWD:/workspace" pipery:base -c "echo hello"
+echo "echo hi" | docker run --rm -i -v "$PWD:/workspace" pipery:base
+```
+
+Published image tags use the repo version:
+
+```bash
+docker pull ghcr.io/pipery-dev/pipery:0.1.0
+docker pull ghcr.io/pipery-dev/pipery:v0.1.0
+docker pull ghcr.io/pipery-dev/pipery:latest
 ```
 
 Log to a file and syslog:
@@ -227,3 +235,4 @@ Each command produces one JSON object per line. Example:
 - Stdout and stderr are streamed to the terminal while also being captured for logging
 - Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected
 - The tool intentionally avoids blocking on log delivery; file or syslog failures are reported to stderr
+- Set `fail_on_error` or `-fail-on-error` to stop after the first non-zero command result, similar to shell errexit behavior for batch runs.
