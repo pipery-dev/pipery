@@ -26,6 +26,7 @@ Container image:
 docker build -t pipery:base .
 ```
 
+<<<<<<< HEAD
 GitHub Actions:
 
 - Runs lint, tests, Go build, and Docker build on pushes and pull requests
@@ -33,6 +34,8 @@ GitHub Actions:
 - Publishes the Docker image to `ghcr.io/<owner>/<repo>:0.1.0`, `:v0.1.0`, and `:latest` on pushes to `main`
 - Creates a GitHub release and uploads a Linux AMD64 tarball on pushes to `main`
 
+=======
+>>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 ## Usage
 
 Interactive mode:
@@ -68,6 +71,7 @@ docker run --rm -i -v "$PWD:/workspace" pipery:base -c "echo hello"
 echo "echo hi" | docker run --rm -i -v "$PWD:/workspace" pipery:base
 ```
 
+<<<<<<< HEAD
 Published image tags use the repo version:
 
 ```bash
@@ -76,6 +80,8 @@ docker pull ghcr.io/<owner>/<repo>:v0.1.0
 docker pull ghcr.io/<owner>/<repo>:latest
 ```
 
+=======
+>>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 Log to a file and syslog:
 
 ```bash
@@ -210,7 +216,10 @@ Each command produces one JSON object per line. Example:
 
 - A local `pipery.jsonl` file is created by default, so logging works even with no extra configuration.
 - The included `Dockerfile` builds a reusable Debian slim-based image with `pipery` installed at `/usr/local/bin/pipery`.
+<<<<<<< HEAD
 - The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags.
+=======
+>>>>>>> 2e9a620 (Add Debian slim base image for pipery)
 - With no command arguments, piped stdin is treated as a line-by-line command source.
 - Stdout and stderr are streamed to the terminal while also being captured for logging.
 - Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected.
