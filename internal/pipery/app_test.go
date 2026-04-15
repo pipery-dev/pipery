@@ -200,3 +200,59 @@ func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
 		t.Fatalf("expected run summary in stderr, got %q", got)
 	}
 }
+
+func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "pipery.jsonl")
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd returned error: %v", err)
+	}
+	defer func() {
+		if chdirErr := os.Chdir(oldWD); chdirErr != nil {
+			t.Fatalf("failed to restore cwd: %v", chdirErr)
+		}
+	}()
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("Chdir returned error: %v", err)
+	}
+
+	stdin := strings.NewReader("printf 'before\\n'\nexit 7\necho after\n")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	app := NewApp(stdin, stdout, stderr)
+	exitCode, err := app.Run([]string{"-log-file", logPath, "-fail-on-error"})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if exitCode != 7 {
+		t.Fatalf("expected exit code 7, got %d", exitCode)
+	}
+	if got := stdout.String(); got != "before\n" {
+		t.Fatalf("expected fail-on-error to stop before the final command, got stdout %q", got)
+	}
+	if got := stderr.String(); !strings.Contains(got, "pipery summary: mode=stdin commands=2 failed=1 exit_code=7") {
+		t.Fatalf("expected failing run summary in stderr, got %q", got)
+	}
+
+	file, err := os.Open(logPath)
+	if err != nil {
+		t.Fatalf("Open returned error: %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	lineCount := 0
+	for scanner.Scan() {
+		lineCount++
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scanner returned error: %v", err)
+	}
+	if lineCount != 2 {
+		t.Fatalf("expected 2 log entries when fail-on-error stops the session, got %d", lineCount)
+	}
+}
