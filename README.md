@@ -32,6 +32,7 @@ GitHub Actions:
 - Reads the release version from `VERSION`
 - Publishes the Docker image to `ghcr.io/<owner>/<repo>:0.1.0`, `:v0.1.0`, and `:latest` on pushes to `main`
 - Creates a GitHub release and uploads a Linux AMD64 tarball on pushes to `main`
+- When pipery runs inside GitHub Actions and `GITHUB_TOKEN` can read Actions secrets metadata, it fetches repository secret names and uses them for additional masking
 
 ## Usage
 
@@ -173,6 +174,7 @@ Logs are written asynchronously through a bounded queue so command completion is
 - If the async queue fills up, new log entries are dropped and a summary is printed on shutdown
 - Syslog targets accept `udp://host:port` or `tcp://host:port`
 - Secret env vars are masked automatically, and you can extend the matcher set with exact names, prefixes, and suffixes.
+- In GitHub Actions, repository secret names can also be discovered via the Actions secrets API; pipery still never receives secret values from GitHub, only names, and uses matching env vars to scrub captured outputs.
 
 ## Flags
 

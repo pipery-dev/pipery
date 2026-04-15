@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 )
 
@@ -50,11 +51,8 @@ func (a *App) Run(args []string) (int, error) {
 
 	// The logger runs in the background so command execution does not have to
 	// wait for every log write to finish.
-	logger := newAsyncLogger(sinks, cfg.QueueSize, a.stderr, redactionConfig{
-		SecretNames:    cfg.SecretNames,
-		SecretPrefixes: cfg.SecretPrefixes,
-		SecretSuffixes: cfg.SecretSuffixes,
-	})
+	redaction := buildRedactionConfig(cfg, os.Environ(), http.DefaultClient)
+	logger := newAsyncLogger(sinks, cfg.QueueSize, a.stderr, redaction)
 	defer func() {
 		// We still try to flush on shutdown so we do not lose logs unnecessarily.
 		if closeErr := logger.Close(cfg.FlushTimeout); closeErr != nil {
