@@ -2,7 +2,7 @@
 
 `pipery` is a Go CLI that mediates shell command execution and records each run as structured JSON.
 
-Current version: `0.1.0` from [VERSION](/Users/hamed/src/github.com/pipery-dev/pipery/VERSION)
+Current version: `0.1.0` from [VERSION](VERSION)
 
 It supports:
 
