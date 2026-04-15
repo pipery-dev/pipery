@@ -86,6 +86,7 @@ func (a *App) Run(args []string) (int, error) {
 		Logger:          logger,
 		MaxCaptureBytes: cfg.MaxCaptureBytes,
 		Prompt:          cfg.Prompt,
+		FailOnError:     cfg.FailOnError,
 	})
 	if err != nil {
 		return 1, err
@@ -149,6 +150,9 @@ func (a *App) Run(args []string) (int, error) {
 			}
 
 			lastExitCode = result.ExitCode
+			if cfg.FailOnError && result.ExitCode != 0 {
+				return finishRun("shell", result.ExitCode)
+			}
 			if shouldExit {
 				return finishRun("shell", result.ExitCode)
 			}

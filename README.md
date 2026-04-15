@@ -105,6 +105,7 @@ export PIPERY_LOG_FILE=./custom.jsonl
 export PIPERY_QUEUE_SIZE=512
 export PIPERY_FLUSH_TIMEOUT=5s
 export PIPERY_SECRET_PREFIXES=ORG_,CI_
+export PIPERY_FAIL_ON_ERROR=true
 ./pipery -c "echo hello"
 ```
 
@@ -129,6 +130,7 @@ max_capture_bytes: 262144
 shell: /bin/zsh
 prompt: "pipery> "
 flush_timeout: 3s
+fail_on_error: false
 secret_names:
   - CUSTOM_SECRET_NAME
 secret_prefixes:
@@ -146,6 +148,7 @@ Supported environment variables:
 - `PIPERY_MAX_CAPTURE_BYTES`
 - `PIPERY_SHELL`
 - `PIPERY_PROMPT`
+- `PIPERY_FAIL_ON_ERROR`
 - `PIPERY_FLUSH_TIMEOUT`
 - `PIPERY_SECRET_NAMES`
 - `PIPERY_SECRET_PREFIXES`
@@ -188,6 +191,7 @@ Logs are written asynchronously through a bounded queue so command completion is
 -max-capture-bytes  max bytes recorded for stdin/stdout/stderr, default: 262144
 -shell              shell path used for -c and REPL execution
 -prompt             interactive prompt, default: pipery>
+-fail-on-error      stop the session when a command exits non-zero
 -flush-timeout      max time to wait for async log flush on exit, default: 3s
 -secret-names      comma-separated env var names to always mask in logs
 -secret-prefixes   comma-separated env var prefixes to mask in logs
@@ -230,3 +234,4 @@ Each command produces one JSON object per line. Example:
 - Stdout and stderr are streamed to the terminal while also being captured for logging.
 - Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected.
 - The tool intentionally avoids blocking on log delivery; file or syslog failures are reported to stderr.
+- Set `fail_on_error` or `-fail-on-error` to stop after the first non-zero command result, similar to shell errexit behavior for batch runs.

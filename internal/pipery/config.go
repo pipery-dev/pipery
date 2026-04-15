@@ -24,6 +24,7 @@ type config struct {
 	MaxCaptureBytes int
 	Shell           string
 	Prompt          string
+	FailOnError     bool
 	FlushTimeout    time.Duration
 	SecretNames     []string
 	SecretPrefixes  []string
@@ -59,6 +60,7 @@ type flagOverrides struct {
 	MaxCaptureBytes int
 	Shell           string
 	Prompt          string
+	FailOnError     bool
 	FlushTimeout    time.Duration
 	SecretNames     string
 	SecretPrefixes  string
@@ -92,6 +94,7 @@ func parseArgs(args []string, output io.Writer) (config, []string, []string, boo
 	flags.IntVar(&overrides.MaxCaptureBytes, "max-capture-bytes", 0, "maximum bytes captured per stdin/stdout/stderr field")
 	flags.StringVar(&overrides.Shell, "shell", "", "shell used for -c commands and REPL execution")
 	flags.StringVar(&overrides.Prompt, "prompt", "", "interactive prompt")
+	flags.BoolVar(&overrides.FailOnError, "fail-on-error", false, "stop the session when a command exits non-zero")
 	flags.DurationVar(&overrides.FlushTimeout, "flush-timeout", 0, "maximum time to wait for async log flushing on exit")
 	flags.StringVar(&overrides.SecretNames, "secret-names", "", "comma-separated env var names to always mask in logs")
 	flags.StringVar(&overrides.SecretPrefixes, "secret-prefixes", "", "comma-separated env var prefixes to mask in logs")
@@ -146,6 +149,7 @@ func defaultConfig() config {
 		MaxCaptureBytes: 256 * 1024,
 		Shell:           defaultShell(),
 		Prompt:          "pipery> ",
+		FailOnError:     false,
 		FlushTimeout:    3 * time.Second,
 		SecretNames:     nil,
 		SecretPrefixes:  nil,
@@ -201,6 +205,7 @@ func loadConfig(configFile string) (config, error) {
 	cfg.MaxCaptureBytes = v.GetInt("max_capture_bytes")
 	cfg.Shell = v.GetString("shell")
 	cfg.Prompt = v.GetString("prompt")
+	cfg.FailOnError = v.GetBool("fail_on_error")
 	cfg.FlushTimeout = v.GetDuration("flush_timeout")
 	cfg.SecretNames = readStringList(v, "secret_names")
 	cfg.SecretPrefixes = readStringList(v, "secret_prefixes")
@@ -226,6 +231,7 @@ func setViperDefaults(v *viper.Viper, cfg config) {
 	v.SetDefault("max_capture_bytes", cfg.MaxCaptureBytes)
 	v.SetDefault("shell", cfg.Shell)
 	v.SetDefault("prompt", cfg.Prompt)
+	v.SetDefault("fail_on_error", cfg.FailOnError)
 	v.SetDefault("flush_timeout", cfg.FlushTimeout.String())
 	v.SetDefault("secret_names", cfg.SecretNames)
 	v.SetDefault("secret_prefixes", cfg.SecretPrefixes)
@@ -253,6 +259,8 @@ func applyFlagOverrides(flags *flag.FlagSet, cfg *config, overrides flagOverride
 			cfg.Shell = overrides.Shell
 		case "prompt":
 			cfg.Prompt = overrides.Prompt
+		case "fail-on-error":
+			cfg.FailOnError = overrides.FailOnError
 		case "flush-timeout":
 			cfg.FlushTimeout = overrides.FlushTimeout
 		case "secret-names":
@@ -357,6 +365,7 @@ Logging:
   Add -syslog udp://host:514 or -syslog tcp://host:514 to mirror logs to syslog.
   Config can also come from ./.pipery/config.yaml and PIPERY_* environment variables.
   Secret masking can be extended with secret names, prefixes, and suffixes.
+  Enable -fail-on-error to stop after the first non-zero command result.
 
 Interactive built-ins:
   cd [dir]

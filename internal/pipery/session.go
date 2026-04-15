@@ -28,6 +28,7 @@ type session struct {
 	logger          *asyncLogger
 	maxCaptureBytes int
 	prompt          string
+	failOnError     bool
 	commandCount    int
 	failureCount    int
 }
@@ -55,6 +56,7 @@ type sessionConfig struct {
 	Logger          *asyncLogger
 	MaxCaptureBytes int
 	Prompt          string
+	FailOnError     bool
 }
 
 // newSession builds a session and fills in sensible defaults.
@@ -78,6 +80,7 @@ func newSession(cfg sessionConfig) (*session, error) {
 		logger:          cfg.Logger,
 		maxCaptureBytes: cfg.MaxCaptureBytes,
 		prompt:          cfg.Prompt,
+		failOnError:     cfg.FailOnError,
 	}, nil
 }
 
@@ -130,6 +133,10 @@ func (s *session) runREPL(input io.Reader, showPrompt bool) (int, error) {
 
 		if result.ExitCode != 0 || strings.TrimSpace(line) != "" {
 			lastExitCode = result.ExitCode
+		}
+
+		if s.failOnError && result.ExitCode != 0 {
+			return result.ExitCode, nil
 		}
 
 		if shouldExit {
