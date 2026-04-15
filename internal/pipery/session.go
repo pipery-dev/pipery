@@ -28,6 +28,8 @@ type session struct {
 	logger          *asyncLogger
 	maxCaptureBytes int
 	prompt          string
+	commandCount    int
+	failureCount    int
 }
 
 // executionResult is a deliberately small result object. Right now we only need
@@ -160,11 +162,13 @@ func (s *session) runLine(line string, opts lineRunOptions) (executionResult, bo
 			return executionResult{}, false, err
 		}
 		if handled {
+			s.recordResult(result)
 			return result, shouldExit, nil
 		}
 	}
 
 	result, err := s.runShellCommand(trimmed, opts)
+	s.recordResult(result)
 	return result, false, err
 }
 
@@ -172,7 +176,9 @@ func (s *session) runLine(line string, opts lineRunOptions) (executionResult, bo
 // shell. That means argument boundaries are explicit and not re-parsed by a
 // shell.
 func (s *session) runDirectCommand(command string, args []string, input io.Reader, mode string) (executionResult, error) {
-	return s.runExternal(command, args, input, mode, joinCommandLine(command, args))
+	result, err := s.runExternal(command, args, input, mode, joinCommandLine(command, args))
+	s.recordResult(result)
+	return result, err
 }
 
 // runShellCommand executes one command line through the configured shell.
@@ -295,6 +301,20 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 	s.logger.Log(entry)
 
 	return executionResult{ExitCode: exitCode}, nil
+}
+
+func (s *session) recordResult(result executionResult) {
+	s.commandCount++
+	if result.ExitCode != 0 {
+		s.failureCount++
+	}
+}
+
+func (s *session) summary() sessionSummary {
+	return sessionSummary{
+		CommandCount: s.commandCount,
+		FailureCount: s.failureCount,
+	}
 }
 
 // tryBuiltin checks whether the command should be handled by pipery itself.

@@ -49,8 +49,8 @@ func TestAppRunExecutesCommandsFromPipedStdin(t *testing.T) {
 	if got := stdout.String(); got != "Hi\n"+expectedWD+"\n" {
 		t.Fatalf("unexpected stdout %q", got)
 	}
-	if got := stderr.String(); got != "" {
-		t.Fatalf("expected empty stderr, got %q", got)
+	if got := stderr.String(); !strings.Contains(got, "pipery summary: mode=stdin commands=2 failed=0 exit_code=0") {
+		t.Fatalf("expected run summary in stderr, got %q", got)
 	}
 
 	file, err := os.Open(logPath)
@@ -127,5 +127,9 @@ func TestAppRunCreatesDefaultLogFile(t *testing.T) {
 	}
 	if !strings.Contains(string(content), fmt.Sprintf("%q", "default-log\n")) && !strings.Contains(string(content), "default-log") {
 		t.Fatalf("expected default log file to contain command output, got %q", string(content))
+	}
+
+	if got := app.stderr.(*bytes.Buffer).String(); !strings.Contains(got, "pipery summary: mode=stdin commands=1 failed=0 exit_code=0") {
+		t.Fatalf("expected run summary in stderr, got %q", got)
 	}
 }
