@@ -144,8 +144,8 @@ func defaultConfig() config {
 // loadConfig reads config values from an optional YAML file and PIPERY_*
 // environment variables.
 //
-// If no explicit config file is provided, we only look for ./pipery.yaml or
-// ./pipery.yml and simply continue if neither file exists.
+// If no explicit config file is provided, we only look for
+// ./.pipery/config.yaml and simply continue if it does not exist.
 func loadConfig(configFile string) (config, error) {
 	cfg := defaultConfig()
 	v := viper.New()
@@ -174,7 +174,11 @@ func loadConfig(configFile string) (config, error) {
 				return cfg, err
 			}
 		} else {
-			cfg.ConfigFile = v.ConfigFileUsed()
+			if resolved, err := filepath.Abs(v.ConfigFileUsed()); err == nil {
+				cfg.ConfigFile = resolved
+			} else {
+				cfg.ConfigFile = v.ConfigFileUsed()
+			}
 		}
 	}
 
@@ -237,15 +241,14 @@ func applyFlagOverrides(flags *flag.FlagSet, cfg *config, overrides flagOverride
 	})
 }
 
-// discoverDefaultConfigFile checks for the exact default YAML filenames we
+// discoverDefaultConfigFile checks the default repo-local config path we
 // support, instead of letting viper guess based on the basename alone.
 //
 // That matters because the repo also creates files like `pipery.jsonl`, and we
 // do not want to accidentally parse those as configuration.
 func discoverDefaultConfigFile(dir string) (string, error) {
 	candidates := []string{
-		filepath.Join(dir, "pipery.yaml"),
-		filepath.Join(dir, "pipery.yml"),
+		filepath.Join(dir, ".pipery", "config.yaml"),
 	}
 
 	for _, candidate := range candidates {
@@ -271,7 +274,7 @@ func usageText(shell string) string {
 Usage:
   pipery
   echo "echo Hi" | pipery
-  pipery -config ./pipery.yaml
+  pipery -config ./.pipery/config.yaml
   pipery -c "echo hello"
   pipery -c "cd /tmp" -c "pwd"
   pipery -- ls -la
@@ -286,7 +289,7 @@ Logging:
   Logs are written asynchronously as JSON lines.
   The default file sink is ./pipery.jsonl.
   Add -syslog udp://host:514 or -syslog tcp://host:514 to mirror logs to syslog.
-  Config can also come from pipery.yaml and PIPERY_* environment variables.
+  Config can also come from ./.pipery/config.yaml and PIPERY_* environment variables.
 
 Interactive built-ins:
   cd [dir]

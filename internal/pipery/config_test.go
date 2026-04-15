@@ -11,7 +11,12 @@ import (
 
 func TestParseArgsLoadsYAMLConfig(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "pipery.yaml")
+	configDir := filepath.Join(tempDir, ".pipery")
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
 
 	configBody := strings.Join([]string{
 		"log_file: from-config.jsonl",
@@ -69,7 +74,12 @@ func TestParseArgsLoadsYAMLConfig(t *testing.T) {
 
 func TestParseArgsEnvOverridesConfigAndFlagsOverrideEnv(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "pipery.yaml")
+	configDir := filepath.Join(tempDir, ".pipery")
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
 
 	configBody := strings.Join([]string{
 		"log_file: config.jsonl",
@@ -145,5 +155,53 @@ func TestParseArgsIgnoresNonYAMLDefaultFiles(t *testing.T) {
 	}
 	if cfg.LogFile != "pipery.jsonl" {
 		t.Fatalf("expected default log file, got %q", cfg.LogFile)
+	}
+}
+
+func TestParseArgsLoadsDefaultDotPiperyConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".pipery")
+	configPath := filepath.Join(configDir, "config.yaml")
+
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+
+	if err := os.WriteFile(configPath, []byte("queue_size: 99\nprompt: \"dotpipery> \"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd returned error: %v", err)
+	}
+	defer func() {
+		if chdirErr := os.Chdir(oldWD); chdirErr != nil {
+			t.Fatalf("failed to restore cwd: %v", chdirErr)
+		}
+	}()
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("Chdir returned error: %v", err)
+	}
+	currentWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd returned error: %v", err)
+	}
+
+	cfg, _, _, _, err := parseArgs(nil, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("parseArgs returned error: %v", err)
+	}
+
+	expectedConfigFile := filepath.Join(currentWD, ".pipery", "config.yaml")
+	if cfg.ConfigFile != expectedConfigFile {
+		t.Fatalf("expected config file %q, got %q", expectedConfigFile, cfg.ConfigFile)
+	}
+	if cfg.QueueSize != 99 {
+		t.Fatalf("expected queue size 99, got %d", cfg.QueueSize)
+	}
+	if cfg.Prompt != "dotpipery> " {
+		t.Fatalf("expected prompt from default config, got %q", cfg.Prompt)
 	}
 }
