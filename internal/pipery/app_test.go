@@ -195,4 +195,8 @@ func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
 	if lineCount != 2 {
 		t.Fatalf("expected 2 log entries when fail-on-error stops the session, got %d", lineCount)
 	}
+
+	if got := app.stderr.(*bytes.Buffer).String(); !strings.Contains(got, "pipery summary: mode=stdin commands=1 failed=0 exit_code=0") {
+		t.Fatalf("expected run summary in stderr, got %q", got)
+	}
 }
