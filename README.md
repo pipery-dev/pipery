@@ -94,7 +94,7 @@ printf 'hello\n' | ./pipery -c "cat"
 Use a YAML config file:
 
 ```bash
-./pipery -config ./pipery.yaml
+./pipery -config ./.pipery/config.yaml
 ```
 
 Or environment variables:
@@ -117,7 +117,8 @@ Configuration is loaded in this order:
 
 If you do not pass `-config`, pipery automatically looks for `./pipery.yaml` or `./pipery.yml`.
 
-Example `pipery.yaml`:
+If you do not pass `-config`, pipery automatically looks for `./.pipery/config.yaml`.
+Example `./.pipery/config.yaml`:
 
 ```yaml
 log_file: ./pipery.jsonl
