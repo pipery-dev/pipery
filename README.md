@@ -103,6 +103,7 @@ Or environment variables:
 export PIPERY_LOG_FILE=./custom.jsonl
 export PIPERY_QUEUE_SIZE=512
 export PIPERY_FLUSH_TIMEOUT=5s
+export PIPERY_SECRET_PREFIXES=ORG_,CI_
 ./pipery -c "echo hello"
 ```
 
@@ -114,8 +115,6 @@ Configuration is loaded in this order:
 - YAML config file
 - `PIPERY_*` environment variables
 - CLI flags
-
-If you do not pass `-config`, pipery automatically looks for `./pipery.yaml` or `./pipery.yml`.
 
 If you do not pass `-config`, pipery automatically looks for `./.pipery/config.yaml`.
 Example `./.pipery/config.yaml`:
@@ -129,6 +128,12 @@ max_capture_bytes: 262144
 shell: /bin/zsh
 prompt: "pipery> "
 flush_timeout: 3s
+secret_names:
+  - CUSTOM_SECRET_NAME
+secret_prefixes:
+  - ORG_
+secret_suffixes:
+  - _TAIL
 ```
 
 Supported environment variables:
@@ -141,6 +146,9 @@ Supported environment variables:
 - `PIPERY_SHELL`
 - `PIPERY_PROMPT`
 - `PIPERY_FLUSH_TIMEOUT`
+- `PIPERY_SECRET_NAMES`
+- `PIPERY_SECRET_PREFIXES`
+- `PIPERY_SECRET_SUFFIXES`
 
 ## Interactive built-ins
 
@@ -164,6 +172,7 @@ Logs are written asynchronously through a bounded queue so command completion is
 - Default capture size per stream: `262144` bytes
 - If the async queue fills up, new log entries are dropped and a summary is printed on shutdown
 - Syslog targets accept `udp://host:port` or `tcp://host:port`
+- Secret env vars are masked automatically, and you can extend the matcher set with exact names, prefixes, and suffixes.
 
 ## Flags
 
@@ -178,6 +187,9 @@ Logs are written asynchronously through a bounded queue so command completion is
 -shell              shell path used for -c and REPL execution
 -prompt             interactive prompt, default: pipery>
 -flush-timeout      max time to wait for async log flush on exit, default: 3s
+-secret-names      comma-separated env var names to always mask in logs
+-secret-prefixes   comma-separated env var prefixes to mask in logs
+-secret-suffixes   comma-separated env var suffixes to mask in logs
 ```
 
 ## Log format

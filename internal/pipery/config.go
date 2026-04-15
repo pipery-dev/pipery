@@ -25,6 +25,9 @@ type config struct {
 	Shell           string
 	Prompt          string
 	FlushTimeout    time.Duration
+	SecretNames     []string
+	SecretPrefixes  []string
+	SecretSuffixes  []string
 }
 
 // stringListFlag implements flag.Value for a repeatable string flag like:
@@ -57,6 +60,9 @@ type flagOverrides struct {
 	Shell           string
 	Prompt          string
 	FlushTimeout    time.Duration
+	SecretNames     string
+	SecretPrefixes  string
+	SecretSuffixes  string
 }
 
 // parseArgs translates raw CLI arguments into a typed config plus the chosen
@@ -87,6 +93,9 @@ func parseArgs(args []string, output io.Writer) (config, []string, []string, boo
 	flags.StringVar(&overrides.Shell, "shell", "", "shell used for -c commands and REPL execution")
 	flags.StringVar(&overrides.Prompt, "prompt", "", "interactive prompt")
 	flags.DurationVar(&overrides.FlushTimeout, "flush-timeout", 0, "maximum time to wait for async log flushing on exit")
+	flags.StringVar(&overrides.SecretNames, "secret-names", "", "comma-separated env var names to always mask in logs")
+	flags.StringVar(&overrides.SecretPrefixes, "secret-prefixes", "", "comma-separated env var prefixes to mask in logs")
+	flags.StringVar(&overrides.SecretSuffixes, "secret-suffixes", "", "comma-separated env var suffixes to mask in logs")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -138,6 +147,9 @@ func defaultConfig() config {
 		Shell:           defaultShell(),
 		Prompt:          "pipery> ",
 		FlushTimeout:    3 * time.Second,
+		SecretNames:     nil,
+		SecretPrefixes:  nil,
+		SecretSuffixes:  nil,
 	}
 }
 
@@ -190,6 +202,9 @@ func loadConfig(configFile string) (config, error) {
 	cfg.Shell = v.GetString("shell")
 	cfg.Prompt = v.GetString("prompt")
 	cfg.FlushTimeout = v.GetDuration("flush_timeout")
+	cfg.SecretNames = readStringList(v, "secret_names")
+	cfg.SecretPrefixes = readStringList(v, "secret_prefixes")
+	cfg.SecretSuffixes = readStringList(v, "secret_suffixes")
 
 	if cfg.ConfigFile == "" && configFile != "" {
 		if resolved, err := filepath.Abs(configFile); err == nil {
@@ -212,6 +227,9 @@ func setViperDefaults(v *viper.Viper, cfg config) {
 	v.SetDefault("shell", cfg.Shell)
 	v.SetDefault("prompt", cfg.Prompt)
 	v.SetDefault("flush_timeout", cfg.FlushTimeout.String())
+	v.SetDefault("secret_names", cfg.SecretNames)
+	v.SetDefault("secret_prefixes", cfg.SecretPrefixes)
+	v.SetDefault("secret_suffixes", cfg.SecretSuffixes)
 }
 
 // applyFlagOverrides only copies flags that the user explicitly set. This keeps
@@ -237,8 +255,56 @@ func applyFlagOverrides(flags *flag.FlagSet, cfg *config, overrides flagOverride
 			cfg.Prompt = overrides.Prompt
 		case "flush-timeout":
 			cfg.FlushTimeout = overrides.FlushTimeout
+		case "secret-names":
+			cfg.SecretNames = splitCSV(overrides.SecretNames)
+		case "secret-prefixes":
+			cfg.SecretPrefixes = splitCSV(overrides.SecretPrefixes)
+		case "secret-suffixes":
+			cfg.SecretSuffixes = splitCSV(overrides.SecretSuffixes)
 		}
 	})
+}
+
+func readStringList(v *viper.Viper, key string) []string {
+	values := v.GetStringSlice(key)
+	if len(values) == 0 {
+		values = []string{v.GetString(key)}
+	}
+
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, item := range splitCSV(value) {
+			normalized = append(normalized, item)
+		}
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
+}
+
+func splitCSV(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+
+	parts := strings.Split(value, ",")
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		normalized = append(normalized, trimmed)
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
 }
 
 // discoverDefaultConfigFile checks the default repo-local config path we
@@ -290,6 +356,7 @@ Logging:
   The default file sink is ./pipery.jsonl.
   Add -syslog udp://host:514 or -syslog tcp://host:514 to mirror logs to syslog.
   Config can also come from ./.pipery/config.yaml and PIPERY_* environment variables.
+  Secret masking can be extended with secret names, prefixes, and suffixes.
 
 Interactive built-ins:
   cd [dir]

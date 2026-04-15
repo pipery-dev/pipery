@@ -85,6 +85,8 @@ func TestParseArgsEnvOverridesConfigAndFlagsOverrideEnv(t *testing.T) {
 		"log_file: config.jsonl",
 		"queue_size: 64",
 		`flush_timeout: "3s"`,
+		"secret_names:",
+		"  - FROM_CONFIG",
 	}, "\n")
 	if err := os.WriteFile(configPath, []byte(configBody), 0o644); err != nil {
 		t.Fatalf("WriteFile returned error: %v", err)
@@ -93,11 +95,13 @@ func TestParseArgsEnvOverridesConfigAndFlagsOverrideEnv(t *testing.T) {
 	t.Setenv("PIPERY_LOG_FILE", "env.jsonl")
 	t.Setenv("PIPERY_QUEUE_SIZE", "128")
 	t.Setenv("PIPERY_FLUSH_TIMEOUT", "4s")
+	t.Setenv("PIPERY_SECRET_PREFIXES", "ENV_,CI_")
 
 	cfg, _, _, _, err := parseArgs([]string{
 		"-config", configPath,
 		"-queue-size", "256",
 		"-flush-timeout", "7s",
+		"-secret-suffixes", "_TAIL,_POSTFIX",
 	}, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("parseArgs returned error: %v", err)
@@ -111,6 +115,15 @@ func TestParseArgsEnvOverridesConfigAndFlagsOverrideEnv(t *testing.T) {
 	}
 	if cfg.FlushTimeout != 7*time.Second {
 		t.Fatalf("expected flag to override env flush timeout, got %s", cfg.FlushTimeout)
+	}
+	if len(cfg.SecretNames) != 1 || cfg.SecretNames[0] != "FROM_CONFIG" {
+		t.Fatalf("expected secret names from config, got %#v", cfg.SecretNames)
+	}
+	if len(cfg.SecretPrefixes) != 2 || cfg.SecretPrefixes[0] != "ENV_" || cfg.SecretPrefixes[1] != "CI_" {
+		t.Fatalf("expected secret prefixes from env, got %#v", cfg.SecretPrefixes)
+	}
+	if len(cfg.SecretSuffixes) != 2 || cfg.SecretSuffixes[0] != "_TAIL" || cfg.SecretSuffixes[1] != "_POSTFIX" {
+		t.Fatalf("expected secret suffixes from flags, got %#v", cfg.SecretSuffixes)
 	}
 }
 
