@@ -118,7 +118,6 @@ Configuration is loaded in this order:
 If you do not pass `-config`, pipery automatically looks for `./pipery.yaml` or `./pipery.yml`.
 
 If you do not pass `-config`, pipery automatically looks for `./.pipery/config.yaml`.
-
 Example `./.pipery/config.yaml`:
 
 ```yaml
