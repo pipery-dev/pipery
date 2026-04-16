@@ -151,7 +151,7 @@ func TestParseArgsIgnoresNonYAMLDefaultFiles(t *testing.T) {
 	}
 
 	// This file should never be treated as config, even though it shares the
-	// "pipery" basename that we use for the default YAML config names.
+	// The old product basename should never be treated as config either.
 	if err := os.WriteFile("pipery.jsonl", []byte("{\"not\":\"yaml\"}\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestParseArgsIgnoresNonYAMLDefaultFiles(t *testing.T) {
 	if cfg.ConfigFile != "" {
 		t.Fatalf("expected no config file to be loaded, got %q", cfg.ConfigFile)
 	}
-	if cfg.LogFile != "pipery.jsonl" {
+	if cfg.LogFile != "psh.jsonl" {
 		t.Fatalf("expected default log file, got %q", cfg.LogFile)
 	}
 }
@@ -186,7 +186,7 @@ func TestParseArgsLoadsDefaultDotPiperyConfig(t *testing.T) {
 		t.Fatalf("MkdirAll returned error: %v", err)
 	}
 
-	if err := os.WriteFile(configPath, []byte("queue_size: 99\nprompt: \"dotpipery> \"\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("queue_size: 99\nprompt: \"dotpsh> \"\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
 
@@ -220,7 +220,7 @@ func TestParseArgsLoadsDefaultDotPiperyConfig(t *testing.T) {
 	if cfg.QueueSize != 99 {
 		t.Fatalf("expected queue size 99, got %d", cfg.QueueSize)
 	}
-	if cfg.Prompt != "dotpipery> " {
+	if cfg.Prompt != "dotpsh> " {
 		t.Fatalf("expected prompt from default config, got %q", cfg.Prompt)
 	}
 }

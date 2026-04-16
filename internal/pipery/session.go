@@ -93,7 +93,7 @@ func (s *session) runREPL(input io.Reader, showPrompt bool) (int, error) {
 	lastExitCode := 0
 	mode := "interactive"
 	if !showPrompt {
-		// When stdin is not a terminal, pipery behaves more like a tiny shell
+		// When stdin is not a terminal, psh behaves more like a tiny shell
 		// script runner: each incoming line is treated as a command.
 		mode = "stdin"
 	}
@@ -162,7 +162,7 @@ func (s *session) runLine(line string, opts lineRunOptions) (executionResult, bo
 	}
 
 	if opts.allowBuiltins {
-		// Built-ins run inside pipery itself because they need to mutate session
+		// Built-ins run inside psh itself because they need to mutate session
 		// state. For example, an external `cd` process cannot change our cwd.
 		result, handled, shouldExit, err := s.tryBuiltin(trimmed, opts.mode)
 		if err != nil {
@@ -324,7 +324,7 @@ func (s *session) summary() sessionSummary {
 	}
 }
 
-// tryBuiltin checks whether the command should be handled by pipery itself.
+// tryBuiltin checks whether the command should be handled by psh itself.
 //
 // The returned booleans mean:
 // - handled: this line matched a built-in
@@ -383,7 +383,7 @@ func (s *session) runExitBuiltin(rawCommand, mode string) (executionResult, bool
 		// We keep the syntax intentionally simple: only one numeric argument.
 		parsed, err := strconv.Atoi(fields[1])
 		if err != nil {
-			stderr := fmt.Sprintf("pipery: invalid exit code %q\n", fields[1])
+			stderr := fmt.Sprintf("psh: invalid exit code %q\n", fields[1])
 			_, _ = io.WriteString(s.stderr, stderr)
 			finishedAt := time.Now()
 
@@ -459,7 +459,7 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 	// silently poison later commands.
 	info, err := os.Stat(target)
 	if err != nil {
-		stderr := fmt.Sprintf("pipery: %v\n", err)
+		stderr := fmt.Sprintf("psh: %v\n", err)
 		_, _ = io.WriteString(s.stderr, stderr)
 		finishedAt := time.Now()
 
@@ -484,7 +484,7 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 	}
 
 	if !info.IsDir() {
-		stderr := fmt.Sprintf("pipery: %s is not a directory\n", target)
+		stderr := fmt.Sprintf("psh: %s is not a directory\n", target)
 		_, _ = io.WriteString(s.stderr, stderr)
 		finishedAt := time.Now()
 
@@ -541,7 +541,7 @@ func (s *session) runExportBuiltin(rawCommand, mode string) executionResult {
 	if !ok || key == "" {
 		// We require the classic shell-like KEY=VALUE form to keep parsing simple
 		// and predictable.
-		stderr := "pipery: export expects KEY=VALUE\n"
+		stderr := "psh: export expects KEY=VALUE\n"
 		_, _ = io.WriteString(s.stderr, stderr)
 		finishedAt := time.Now()
 
@@ -592,7 +592,7 @@ func (s *session) runUnsetBuiltin(rawCommand, mode string) executionResult {
 	key = stripWrappingQuotes(key)
 
 	if key == "" {
-		stderr := "pipery: unset expects a variable name\n"
+		stderr := "psh: unset expects a variable name\n"
 		_, _ = io.WriteString(s.stderr, stderr)
 		finishedAt := time.Now()
 

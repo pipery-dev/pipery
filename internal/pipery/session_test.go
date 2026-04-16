@@ -27,7 +27,7 @@ func TestSessionBuiltinsAndShellExecution(t *testing.T) {
 		Stderr:          stderr,
 		Logger:          logger,
 		MaxCaptureBytes: 1024,
-		Prompt:          "pipery> ",
+		Prompt:          "psh> ",
 	})
 	if err != nil {
 		t.Fatalf("newSession returned error: %v", err)

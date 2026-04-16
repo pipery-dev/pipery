@@ -12,7 +12,7 @@ import (
 
 func TestAppRunExecutesCommandsFromPipedStdin(t *testing.T) {
 	tempDir := t.TempDir()
-	logPath := filepath.Join(tempDir, "pipery.jsonl")
+	logPath := filepath.Join(tempDir, "psh.jsonl")
 
 	oldWD, err := os.Getwd()
 	if err != nil {
@@ -48,7 +48,7 @@ func TestAppRunExecutesCommandsFromPipedStdin(t *testing.T) {
 	if got := stdout.String(); got != "Hi\n"+expectedWD+"\n" {
 		t.Fatalf("unexpected stdout %q", got)
 	}
-	if got := stderr.String(); !strings.Contains(got, "pipery summary: mode=stdin commands=2 failed=0 exit_code=0") {
+	if got := stderr.String(); !strings.Contains(got, "psh summary: mode=stdin commands=2 failed=0 exit_code=0") {
 		t.Fatalf("expected run summary in stderr, got %q", got)
 	}
 
@@ -119,7 +119,7 @@ func TestAppRunCreatesDefaultLogFile(t *testing.T) {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
 	}
 
-	logPath := filepath.Join(tempDir, "pipery.jsonl")
+	logPath := filepath.Join(tempDir, "psh.jsonl")
 	file, err := os.Open(logPath)
 	if err != nil {
 		t.Fatalf("Open returned error: %v", err)
@@ -143,7 +143,7 @@ func TestAppRunCreatesDefaultLogFile(t *testing.T) {
 
 func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
 	tempDir := t.TempDir()
-	logPath := filepath.Join(tempDir, "pipery.jsonl")
+	logPath := filepath.Join(tempDir, "psh.jsonl")
 
 	oldWD, err := os.Getwd()
 	if err != nil {
@@ -174,7 +174,7 @@ func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
 	if got := stdout.String(); got != "before\n" {
 		t.Fatalf("expected fail-on-error to stop before the final command, got stdout %q", got)
 	}
-	if got := stderr.String(); !strings.Contains(got, "pipery summary: mode=stdin commands=2 failed=1 exit_code=7") {
+	if got := stderr.String(); !strings.Contains(got, "psh summary: mode=stdin commands=2 failed=1 exit_code=7") {
 		t.Fatalf("expected failing run summary in stderr, got %q", got)
 	}
 

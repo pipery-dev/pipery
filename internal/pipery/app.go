@@ -106,7 +106,7 @@ func (a *App) Run(args []string) (int, error) {
 	switch {
 	case len(directCommand) > 0:
 		// Direct mode executes a real program directly, for example:
-		//   pipery -- ls -la
+		//   psh -- ls -la
 		//
 		// If stdin is coming from a pipe or redirected file, we forward it to the
 		// child process and capture it in the log entry.
@@ -160,7 +160,7 @@ func (a *App) Run(args []string) (int, error) {
 
 		return finishRun("shell", lastExitCode)
 	default:
-		// With no command arguments, pipery behaves like an interactive shell when
+		// With no command arguments, psh behaves like an interactive shell when
 		// stdin is a terminal, or like a line-by-line script runner when commands
 		// are piped into stdin.
 		mode := "interactive"
@@ -180,7 +180,7 @@ func (a *App) printRunSummary(summary runSummary) {
 	duration := summary.FinishedAt.Sub(summary.StartedAt)
 	fmt.Fprintf(
 		a.stderr,
-		"pipery summary: mode=%s commands=%d failed=%d exit_code=%d started_at=%s finished_at=%s duration=%s\n",
+		"psh summary: mode=%s commands=%d failed=%d exit_code=%d started_at=%s finished_at=%s duration=%s\n",
 		summary.Mode,
 		summary.Session.CommandCount,
 		summary.Session.FailureCount,
@@ -212,7 +212,7 @@ func buildSinks(cfg config) ([]sink, error) {
 	}
 
 	if len(sinks) == 0 {
-		return nil, errors.New("pipery: at least one log sink is required, set -log-file or -syslog")
+		return nil, errors.New("psh: at least one log sink is required, set -log-file or -syslog")
 	}
 
 	return sinks, nil

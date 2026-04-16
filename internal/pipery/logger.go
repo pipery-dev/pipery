@@ -260,7 +260,7 @@ func (l *asyncLogger) Close(timeout time.Duration) error {
 		}
 
 		if dropped := l.dropped.Load(); dropped > 0 {
-			fmt.Fprintf(l.stderr, "pipery: dropped %d log entries because the async queue was full\n", dropped)
+			fmt.Fprintf(l.stderr, "psh: dropped %d log entries because the async queue was full\n", dropped)
 		}
 	})
 
@@ -276,7 +276,7 @@ func (l *asyncLogger) run() {
 		// Each sink receives one JSON line per entry.
 		payload, err := json.Marshal(entry)
 		if err != nil {
-			fmt.Fprintf(l.stderr, "pipery: failed to encode log entry: %v\n", err)
+			fmt.Fprintf(l.stderr, "psh: failed to encode log entry: %v\n", err)
 			continue
 		}
 
@@ -284,7 +284,7 @@ func (l *asyncLogger) run() {
 
 		for _, currentSink := range l.sinks {
 			if err := currentSink.Write(payload); err != nil {
-				fmt.Fprintf(l.stderr, "pipery: failed to write log entry to %s: %v\n", currentSink.Name(), err)
+				fmt.Fprintf(l.stderr, "psh: failed to write log entry to %s: %v\n", currentSink.Name(), err)
 			}
 		}
 	}
@@ -294,7 +294,7 @@ func (l *asyncLogger) run() {
 func (l *asyncLogger) closeSinks() {
 	for _, currentSink := range l.sinks {
 		if err := currentSink.Close(); err != nil {
-			fmt.Fprintf(l.stderr, "pipery: failed to close %s: %v\n", currentSink.Name(), err)
+			fmt.Fprintf(l.stderr, "psh: failed to close %s: %v\n", currentSink.Name(), err)
 		}
 	}
 }
