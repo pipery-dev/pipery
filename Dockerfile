@@ -24,6 +24,9 @@ COPY --from=builder /out/psh /usr/local/bin/psh
 RUN groupadd -r pipery && useradd --no-log-init -r -g pipery pipery
 USER pipery
 
+RUN groupadd -r pipery && useradd --no-log-init -r -g pipery pipery
+USER pipery
+
 WORKDIR /workspace
 
 ENTRYPOINT ["psh"]
