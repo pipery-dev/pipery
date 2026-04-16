@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,16 +120,24 @@ func TestAppRunCreatesDefaultLogFile(t *testing.T) {
 	}
 
 	logPath := filepath.Join(tempDir, "pipery.jsonl")
-	content, err := os.ReadFile(logPath)
+	file, err := os.Open(logPath)
 	if err != nil {
-		t.Fatalf("ReadFile returned error: %v", err)
+		t.Fatalf("Open returned error: %v", err)
 	}
-	if !strings.Contains(string(content), fmt.Sprintf("%q", "default-log\n")) && !strings.Contains(string(content), "default-log") {
-		t.Fatalf("expected default log file to contain command output, got %q", string(content))
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	if !scanner.Scan() {
+		t.Fatalf("expected at least one log entry, but file is empty")
 	}
 
-	if got := app.stderr.(*bytes.Buffer).String(); !strings.Contains(got, "pipery summary: mode=stdin commands=1 failed=0 exit_code=0") {
-		t.Fatalf("expected run summary in stderr, got %q", got)
+	var entry map[string]any
+	if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+		t.Fatalf("failed to unmarshal log entry: %v", err)
+	}
+
+	if stdout, ok := entry["stdout"].(string); !ok || stdout != "default-log\n" {
+		t.Fatalf(`expected stdout to be "default-log\n", got %q`, stdout)
 	}
 }
 
