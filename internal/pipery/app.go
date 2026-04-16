@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"time"
 )
 
 // App is the top-level coordinator for the CLI.
@@ -15,6 +17,19 @@ type App struct {
 	stdin  io.Reader
 	stdout io.Writer
 	stderr io.Writer
+}
+
+type sessionSummary struct {
+	CommandCount int
+	FailureCount int
+}
+
+type runSummary struct {
+	Mode       string
+	StartedAt  time.Time
+	FinishedAt time.Time
+	ExitCode   int
+	Session    sessionSummary
 }
 
 // NewApp wires the three standard streams into an App instance.
@@ -34,6 +49,8 @@ func NewApp(stdin io.Reader, stdout io.Writer, stderr io.Writer) *App {
 // 3. Create a session that owns shell state like cwd/env.
 // 4. Execute either a direct command, a list of -c commands, or the REPL.
 func (a *App) Run(args []string) (int, error) {
+	runStartedAt := time.Now()
+
 	cfg, shellCommands, directCommand, showHelp, err := parseArgs(args, a.stderr)
 	if err != nil {
 		return 1, err
@@ -50,7 +67,8 @@ func (a *App) Run(args []string) (int, error) {
 
 	// The logger runs in the background so command execution does not have to
 	// wait for every log write to finish.
-	logger := newAsyncLogger(sinks, cfg.QueueSize, a.stderr)
+	redaction := buildRedactionConfig(cfg, os.Environ(), http.DefaultClient)
+	logger := newAsyncLogger(sinks, cfg.QueueSize, a.stderr, redaction)
 	defer func() {
 		// We still try to flush on shutdown so we do not lose logs unnecessarily.
 		if closeErr := logger.Close(cfg.FlushTimeout); closeErr != nil {
@@ -68,9 +86,21 @@ func (a *App) Run(args []string) (int, error) {
 		Logger:          logger,
 		MaxCaptureBytes: cfg.MaxCaptureBytes,
 		Prompt:          cfg.Prompt,
+		FailOnError:     cfg.FailOnError,
 	})
 	if err != nil {
 		return 1, err
+	}
+
+	finishRun := func(mode string, exitCode int) (int, error) {
+		a.printRunSummary(runSummary{
+			Mode:       mode,
+			StartedAt:  runStartedAt,
+			FinishedAt: time.Now(),
+			ExitCode:   exitCode,
+			Session:    currentSession.summary(),
+		})
+		return exitCode, nil
 	}
 
 	switch {
@@ -88,7 +118,7 @@ func (a *App) Run(args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-		return result.ExitCode, nil
+		return finishRun("direct", result.ExitCode)
 	case len(shellCommands) > 0:
 		// Shell command mode executes each -c string in order through the
 		// configured shell. This gives us shell syntax like pipes, redirects,
@@ -120,18 +150,45 @@ func (a *App) Run(args []string) (int, error) {
 			}
 
 			lastExitCode = result.ExitCode
+			if cfg.FailOnError && result.ExitCode != 0 {
+				return finishRun("shell", result.ExitCode)
+			}
 			if shouldExit {
-				return result.ExitCode, nil
+				return finishRun("shell", result.ExitCode)
 			}
 		}
 
-		return lastExitCode, nil
+		return finishRun("shell", lastExitCode)
 	default:
 		// With no command arguments, pipery behaves like an interactive shell when
 		// stdin is a terminal, or like a line-by-line script runner when commands
 		// are piped into stdin.
-		return currentSession.runREPL(a.stdin, readerIsTerminal(a.stdin))
+		mode := "interactive"
+		if !readerIsTerminal(a.stdin) {
+			mode = "stdin"
+		}
+
+		exitCode, err := currentSession.runREPL(a.stdin, mode == "interactive")
+		if err != nil {
+			return 1, err
+		}
+		return finishRun(mode, exitCode)
 	}
+}
+
+func (a *App) printRunSummary(summary runSummary) {
+	duration := summary.FinishedAt.Sub(summary.StartedAt)
+	fmt.Fprintf(
+		a.stderr,
+		"pipery summary: mode=%s commands=%d failed=%d exit_code=%d started_at=%s finished_at=%s duration=%s\n",
+		summary.Mode,
+		summary.Session.CommandCount,
+		summary.Session.FailureCount,
+		summary.ExitCode,
+		summary.StartedAt.Format(time.RFC3339),
+		summary.FinishedAt.Format(time.RFC3339),
+		duration.Round(time.Millisecond),
+	)
 }
 
 // buildSinks turns the parsed config into concrete log sink implementations.

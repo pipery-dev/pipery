@@ -28,6 +28,9 @@ type session struct {
 	logger          *asyncLogger
 	maxCaptureBytes int
 	prompt          string
+	failOnError     bool
+	commandCount    int
+	failureCount    int
 }
 
 // executionResult is a deliberately small result object. Right now we only need
@@ -53,6 +56,7 @@ type sessionConfig struct {
 	Logger          *asyncLogger
 	MaxCaptureBytes int
 	Prompt          string
+	FailOnError     bool
 }
 
 // newSession builds a session and fills in sensible defaults.
@@ -76,6 +80,7 @@ func newSession(cfg sessionConfig) (*session, error) {
 		logger:          cfg.Logger,
 		maxCaptureBytes: cfg.MaxCaptureBytes,
 		prompt:          cfg.Prompt,
+		failOnError:     cfg.FailOnError,
 	}, nil
 }
 
@@ -130,6 +135,10 @@ func (s *session) runREPL(input io.Reader, showPrompt bool) (int, error) {
 			lastExitCode = result.ExitCode
 		}
 
+		if s.failOnError && result.ExitCode != 0 {
+			return result.ExitCode, nil
+		}
+
 		if shouldExit {
 			return result.ExitCode, nil
 		}
@@ -160,11 +169,13 @@ func (s *session) runLine(line string, opts lineRunOptions) (executionResult, bo
 			return executionResult{}, false, err
 		}
 		if handled {
+			s.recordResult(result)
 			return result, shouldExit, nil
 		}
 	}
 
 	result, err := s.runShellCommand(trimmed, opts)
+	s.recordResult(result)
 	return result, false, err
 }
 
@@ -172,7 +183,9 @@ func (s *session) runLine(line string, opts lineRunOptions) (executionResult, bo
 // shell. That means argument boundaries are explicit and not re-parsed by a
 // shell.
 func (s *session) runDirectCommand(command string, args []string, input io.Reader, mode string) (executionResult, error) {
-	return s.runExternal(command, args, input, mode, joinCommandLine(command, args))
+	result, err := s.runExternal(command, args, input, mode, joinCommandLine(command, args))
+	s.recordResult(result)
+	return result, err
 }
 
 // runShellCommand executes one command line through the configured shell.
@@ -252,12 +265,11 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 	waitErr := cmd.Wait()
 	finishedAt := time.Now()
 	exitCode := deriveExitCode(waitErr)
-	entryErr := ""
-
+	var errs []string
 	if waitErr != nil && exitCode < 0 {
 		// Exit errors with a real exit code are already represented by exitCode.
 		// We only keep the string form for unusual failures.
-		entryErr = waitErr.Error()
+		errs = append(errs, waitErr.Error())
 	}
 
 	if copyDone != nil {
@@ -265,9 +277,10 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 		// input-copy error.
 		result := <-copyDone
 		if result.err != nil {
-			entryErr = result.err.Error()
+			errs = append(errs, result.err.Error())
 		}
 	}
+	entryErr := strings.Join(errs, "; ")
 
 	entry := logEntry{
 		Timestamp:       finishedAt,
@@ -295,6 +308,20 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 	s.logger.Log(entry)
 
 	return executionResult{ExitCode: exitCode}, nil
+}
+
+func (s *session) recordResult(result executionResult) {
+	s.commandCount++
+	if result.ExitCode != 0 {
+		s.failureCount++
+	}
+}
+
+func (s *session) summary() sessionSummary {
+	return sessionSummary{
+		CommandCount: s.commandCount,
+		FailureCount: s.failureCount,
+	}
 }
 
 // tryBuiltin checks whether the command should be handled by pipery itself.

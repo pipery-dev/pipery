@@ -12,7 +12,7 @@ func TestSessionBuiltinsAndShellExecution(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	recordSink := &recordingSink{}
-	logger := newAsyncLogger([]sink{recordSink}, 16, stderr)
+	logger := newAsyncLogger([]sink{recordSink}, 16, stderr, redactionConfig{})
 	defer func() {
 		if err := logger.Close(time.Second); err != nil {
 			t.Fatalf("Close returned error: %v", err)

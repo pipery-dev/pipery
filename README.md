@@ -2,7 +2,7 @@
 
 `pipery` is a Go CLI that mediates shell command execution and records each run as structured JSON.
 
-Current version: `0.1.0` from [VERSION](/Users/hamed/src/github.com/pipery-dev/pipery/VERSION)
+Current version: `0.1.0` from [VERSION](VERSION)
 
 It supports:
 
@@ -32,6 +32,7 @@ GitHub Actions:
 - Reads the release version from `VERSION`
 - Publishes the Docker image to `ghcr.io/<owner>/<repo>:0.1.0`, `:v0.1.0`, and `:latest` on pushes to `main`
 - Creates a GitHub release and uploads a Linux AMD64 tarball on pushes to `main`
+- When pipery runs inside GitHub Actions and `GITHUB_TOKEN` can read Actions secrets metadata, it fetches repository secret names and uses them for additional masking
 
 ## Usage
 
@@ -103,6 +104,8 @@ Or environment variables:
 export PIPERY_LOG_FILE=./custom.jsonl
 export PIPERY_QUEUE_SIZE=512
 export PIPERY_FLUSH_TIMEOUT=5s
+export PIPERY_SECRET_PREFIXES=ORG_,CI_
+export PIPERY_FAIL_ON_ERROR=true
 ./pipery -c "echo hello"
 ```
 
@@ -114,8 +117,6 @@ Configuration is loaded in this order:
 - YAML config file
 - `PIPERY_*` environment variables
 - CLI flags
-
-If you do not pass `-config`, pipery automatically looks for `./pipery.yaml` or `./pipery.yml`.
 
 If you do not pass `-config`, pipery automatically looks for `./.pipery/config.yaml`.
 Example `./.pipery/config.yaml`:
@@ -129,6 +130,13 @@ max_capture_bytes: 262144
 shell: /bin/zsh
 prompt: "pipery> "
 flush_timeout: 3s
+fail_on_error: false
+secret_names:
+  - CUSTOM_SECRET_NAME
+secret_prefixes:
+  - ORG_
+secret_suffixes:
+  - _TAIL
 ```
 
 Supported environment variables:
@@ -140,7 +148,11 @@ Supported environment variables:
 - `PIPERY_MAX_CAPTURE_BYTES`
 - `PIPERY_SHELL`
 - `PIPERY_PROMPT`
+- `PIPERY_FAIL_ON_ERROR`
 - `PIPERY_FLUSH_TIMEOUT`
+- `PIPERY_SECRET_NAMES`
+- `PIPERY_SECRET_PREFIXES`
+- `PIPERY_SECRET_SUFFIXES`
 
 ## Interactive built-ins
 
@@ -164,6 +176,8 @@ Logs are written asynchronously through a bounded queue so command completion is
 - Default capture size per stream: `262144` bytes
 - If the async queue fills up, new log entries are dropped and a summary is printed on shutdown
 - Syslog targets accept `udp://host:port` or `tcp://host:port`
+- Secret env vars are masked automatically, and you can extend the matcher set with exact names, prefixes, and suffixes.
+- In GitHub Actions, repository secret names can also be discovered via the Actions secrets API; pipery still never receives secret values from GitHub, only names, and uses matching env vars to scrub captured outputs.
 
 ## Flags
 
@@ -177,7 +191,11 @@ Logs are written asynchronously through a bounded queue so command completion is
 -max-capture-bytes  max bytes recorded for stdin/stdout/stderr, default: 262144
 -shell              shell path used for -c and REPL execution
 -prompt             interactive prompt, default: pipery>
+-fail-on-error      stop the session when a command exits non-zero
 -flush-timeout      max time to wait for async log flush on exit, default: 3s
+-secret-names      comma-separated env var names to always mask in logs
+-secret-prefixes   comma-separated env var prefixes to mask in logs
+-secret-suffixes   comma-separated env var suffixes to mask in logs
 ```
 
 ## Log format
@@ -209,9 +227,11 @@ Each command produces one JSON object per line. Example:
 ## Notes
 
 - A local `pipery.jsonl` file is created by default, so logging works even with no extra configuration.
+- The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags.
 - The included `Dockerfile` builds a reusable Debian slim-based image with `pipery` installed at `/usr/local/bin/pipery`.
 - The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags.
 - With no command arguments, piped stdin is treated as a line-by-line command source.
 - Stdout and stderr are streamed to the terminal while also being captured for logging.
 - Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected.
 - The tool intentionally avoids blocking on log delivery; file or syslog failures are reported to stderr.
+- Set `fail_on_error` or `-fail-on-error` to stop after the first non-zero command result, similar to shell errexit behavior for batch runs.
