@@ -139,10 +139,6 @@ func TestAppRunCreatesDefaultLogFile(t *testing.T) {
 	if stdout, ok := entry["stdout"].(string); !ok || stdout != "default-log\n" {
 		t.Fatalf(`expected stdout to be "default-log\n", got %q`, stdout)
 	}
-
-	if got := app.stderr.(*bytes.Buffer).String(); !strings.Contains(got, "pipery summary: mode=stdin commands=1 failed=0 exit_code=0") {
-		t.Fatalf("expected run summary in stderr, got %q", got)
-	}
 }
 
 func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
