@@ -281,9 +281,7 @@ func readStringList(v *viper.Viper, key string) []string {
 
 	normalized := make([]string, 0, len(values))
 	for _, value := range values {
-		for _, item := range splitCSV(value) {
-			normalized = append(normalized, item)
-		}
+		normalized = append(normalized, splitCSV(value)...)
 	}
 
 	if len(normalized) == 0 {
