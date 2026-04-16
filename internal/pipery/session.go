@@ -281,7 +281,6 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 		}
 	}
 	entryErr := strings.Join(errs, "; ")
-	}
 
 	entry := logEntry{
 		Timestamp:       finishedAt,
