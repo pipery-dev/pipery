@@ -265,12 +265,11 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 	waitErr := cmd.Wait()
 	finishedAt := time.Now()
 	exitCode := deriveExitCode(waitErr)
-	entryErr := ""
-
+	var errs []string
 	if waitErr != nil && exitCode < 0 {
 		// Exit errors with a real exit code are already represented by exitCode.
 		// We only keep the string form for unusual failures.
-		entryErr = waitErr.Error()
+		errs = append(errs, waitErr.Error())
 	}
 
 	if copyDone != nil {
@@ -278,8 +277,10 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 		// input-copy error.
 		result := <-copyDone
 		if result.err != nil {
-			entryErr = result.err.Error()
+			errs = append(errs, result.err.Error())
 		}
+	}
+	entryErr := strings.Join(errs, "; ")
 	}
 
 	entry := logEntry{
