@@ -18,6 +18,9 @@ RUN apt-get update \
 
 COPY --from=builder /out/pipery /usr/local/bin/pipery
 
+RUN groupadd -r pipery && useradd --no-log-init -r -g pipery pipery
+USER pipery
+
 WORKDIR /workspace
 
 ENTRYPOINT ["pipery"]
