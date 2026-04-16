@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -178,13 +177,15 @@ func normalizeMatchers(values []string) []string {
 		return nil
 	}
 
+	seen := make(map[string]struct{}, len(values))
 	normalized := make([]string, 0, len(values))
 	for _, value := range values {
 		trimmed := strings.ToUpper(strings.TrimSpace(value))
 		if trimmed == "" {
 			continue
 		}
-		if !slices.Contains(normalized, trimmed) {
+		if _, ok := seen[trimmed]; !ok {
+			seen[trimmed] = struct{}{}
 			normalized = append(normalized, trimmed)
 		}
 	}
