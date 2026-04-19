@@ -12,7 +12,7 @@ import (
 
 func TestAppRunExecutesCommandsFromPipedStdin(t *testing.T) {
 	tempDir := t.TempDir()
-	logPath := filepath.Join(tempDir, "psh.jsonl")
+	logPath := filepath.Join(tempDir, "pipery.jsonl")
 
 	oldWD, err := os.Getwd()
 	if err != nil {

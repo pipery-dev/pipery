@@ -172,7 +172,7 @@ func TestParseArgsIgnoresNonYAMLDefaultFiles(t *testing.T) {
 	if cfg.ConfigFile != "" {
 		t.Fatalf("expected no config file to be loaded, got %q", cfg.ConfigFile)
 	}
-	if cfg.LogFile != "psh.jsonl" {
+	if cfg.LogFile != "pipery.jsonl" {
 		t.Fatalf("expected default log file, got %q", cfg.LogFile)
 	}
 }

@@ -133,16 +133,17 @@ func (r redactor) redactLogEntry(entry logEntry) logEntry {
 	}
 
 	entry.Env = redactedEnv
-	entry.RawCommand = scrubSecrets(entry.RawCommand, secretValues)
-	entry.Stdin = scrubSecrets(entry.Stdin, secretValues)
-	entry.Stdout = scrubSecrets(entry.Stdout, secretValues)
-	entry.Stderr = scrubSecrets(entry.Stderr, secretValues)
-	entry.Error = scrubSecrets(entry.Error, secretValues)
+	replacer := buildSecretReplacer(secretValues)
+	entry.RawCommand = replacer.Replace(entry.RawCommand)
+	entry.Stdin = replacer.Replace(entry.Stdin)
+	entry.Stdout = replacer.Replace(entry.Stdout)
+	entry.Stderr = replacer.Replace(entry.Stderr)
+	entry.Error = replacer.Replace(entry.Error)
 
 	if len(entry.Args) > 0 {
 		redactedArgs := make([]string, len(entry.Args))
 		for index, arg := range entry.Args {
-			redactedArgs[index] = scrubSecrets(arg, secretValues)
+			redactedArgs[index] = replacer.Replace(arg)
 		}
 		entry.Args = redactedArgs
 	}
@@ -150,12 +151,16 @@ func (r redactor) redactLogEntry(entry logEntry) logEntry {
 	return entry
 }
 
-func scrubSecrets(value string, secretValues []string) string {
-	redacted := value
-	for _, secret := range secretValues {
-		redacted = strings.ReplaceAll(redacted, secret, "[MASKED]")
+func buildSecretReplacer(secretValues []string) *strings.Replacer {
+	if len(secretValues) == 0 {
+		return strings.NewReplacer()
 	}
-	return redacted
+
+	replacements := make([]string, 0, len(secretValues)*2)
+	for _, secret := range secretValues {
+		replacements = append(replacements, secret, "[MASKED]")
+	}
+	return strings.NewReplacer(replacements...)
 }
 
 func shouldScrubValue(value string) bool {
@@ -221,15 +226,14 @@ func (r redactor) shouldMaskEnvVar(key string) bool {
 		"TOKEN",
 		"SECRET",
 		"PASSWORD",
-		"PASS",
 		"PRIVATE_KEY",
 		"API_KEY",
 		"ACCESS_KEY",
 		"SECRET_KEY",
 		"CREDENTIAL",
 		"CREDENTIALS",
-		"AUTH",
-		"PAT",
+		"AUTHORIZATION",
+		"AUTH_TOKEN",
 	}
 
 	for _, marker := range sensitiveMarkers {

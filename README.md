@@ -123,7 +123,7 @@ If you do not pass `-config`, `psh` automatically looks for `./.pipery/config.ya
 Example `./.pipery/config.yaml`:
 
 ```yaml
-log_file: ./psh.jsonl
+log_file: ./pipery.jsonl
 syslog: udp://127.0.0.1:514
 syslog_tag: psh
 queue_size: 256
