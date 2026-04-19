@@ -316,7 +316,7 @@ func splitCSV(value string) []string {
 // discoverDefaultConfigFile checks the default repo-local config path we
 // support, instead of letting viper guess based on the basename alone.
 //
-// That matters because the repo also creates files like `psh.jsonl`, and we
+// That matters because the repo also creates files like `pipery.jsonl`, and we
 // do not want to accidentally parse those as configuration.
 func discoverDefaultConfigFile(dir string) (string, error) {
 	candidates := []string{
@@ -359,7 +359,7 @@ Modes:
 
 Logging:
   Logs are written asynchronously as JSON lines.
-  The default file sink is ./psh.jsonl.
+  The default file sink is ./pipery.jsonl.
   Add -syslog udp://host:514 or -syslog tcp://host:514 to mirror logs to syslog.
   Config can also come from ./.pipery/config.yaml and PIPERY_* environment variables.
   Secret masking can be extended with secret names, prefixes, and suffixes.
