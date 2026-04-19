@@ -30,7 +30,7 @@ GitHub Actions:
 
 - Runs lint, tests, Go build, and Docker build on pushes and pull requests
 - Reads the release version from `VERSION`
-- Publishes the Docker image to `ghcr.io/<owner>/<repo>:0.1.0`, `:v0.1.0`, and `:latest` on pushes to `main`
+- Publishes multi-arch Docker images for `linux/amd64` and `linux/arm64` to `ghcr.io/pipery-dev/pipery:0.1.0`, `:v0.1.0`, and `:latest` on pushes to `main`
 - Creates a GitHub release and uploads a Linux AMD64 tarball on pushes to `main`
 - When `psh` runs inside GitHub Actions and `GITHUB_TOKEN` can read Actions secrets metadata, it fetches repository secret names and uses them for additional masking
 

@@ -2,13 +2,16 @@ FROM golang:1.22-bookworm AS builder
 
 WORKDIR /src
 
+ARG TARGETOS
+ARG TARGETARCH
+
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY cmd ./cmd
 COPY internal ./internal
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/psh ./cmd/pipery
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o /out/psh ./cmd/pipery
 
 FROM debian:bookworm-slim
 
