@@ -32,6 +32,7 @@ GitHub Actions:
 - Reads the release version from `VERSION`
 - Publishes multi-arch Docker images for `linux/amd64` and `linux/arm64` to `ghcr.io/pipery-dev/pipery:0.1.0`, `:v0.1.0`, and `:latest` on pushes to `main`
 - Creates a GitHub release and uploads a Linux AMD64 tarball on pushes to `main`
+- Syncs the enabled GitHub wiki from the repository Markdown docs after a successful release
 - When `psh` runs inside GitHub Actions and `GITHUB_TOKEN` can read Actions secrets metadata, it fetches repository secret names and uses them for additional masking
 
 ## Usage
@@ -65,8 +66,8 @@ Run a program directly:
 Run from Docker:
 
 ```bash
-docker run --rm -i -v "$PWD:/workspace" pipery:base -c "echo hello"
-echo "echo hi" | docker run --rm -i -v "$PWD:/workspace" pipery:base
+docker run --rm -i -v "$PWD:/workspace" psh:base -c "echo hello"
+echo "echo hi" | docker run --rm -i -v "$PWD:/workspace" psh:base
 ```
 
 Published image tags use the repo version:
@@ -81,7 +82,7 @@ Log to a file and syslog:
 
 ```bash
 ./psh \
-  -log-file ./pipery.jsonl \
+  -log-file ./psh.jsonl \
   -syslog udp://127.0.0.1:514 \
   -c "echo hello"
 ```
@@ -123,7 +124,7 @@ If you do not pass `-config`, `psh` automatically looks for `./.pipery/config.ya
 Example `./.pipery/config.yaml`:
 
 ```yaml
-log_file: ./pipery.jsonl
+log_file: ./psh.jsonl
 syslog: udp://127.0.0.1:514
 syslog_tag: psh
 queue_size: 256
@@ -172,7 +173,7 @@ All other lines are executed through the configured shell, which defaults to `$S
 
 Logs are written asynchronously through a bounded queue so command completion is not blocked by file or syslog writes.
 
-- Default log file: `./pipery.jsonl`
+- Default log file: `./psh.jsonl`
 - Default queue size: `256`
 - Default capture size per stream: `262144` bytes
 - If the async queue fills up, new log entries are dropped and a summary is printed on shutdown
@@ -181,12 +182,20 @@ Logs are written asynchronously through a bounded queue so command completion is
 - In GitHub Actions, repository and shared organization secret names can also be discovered via the Actions secrets API; `psh` still never receives secret values from GitHub, only names, and uses matching env vars to scrub captured outputs
 - Set `fail_on_error` or `-fail-on-error` to stop after the first non-zero command result, similar to shell errexit behavior for batch runs
 
+## Repository docs
+
+- [Docker image guide](Dockerfile.md)
+- [CLI entrypoint guide](cmd/README.md)
+- [Internal packages overview](internal/README.md)
+- [Core package guide](internal/pipery/README.md)
+- [CI and release workflow guide](.github/workflows/README.md)
+
 ## Flags
 
 ```text
 -config             YAML config file path
 -c                  run a shell command; repeat to run multiple commands
--log-file           JSONL log file path, default: ./pipery.jsonl
+-log-file           JSONL log file path, default: ./psh.jsonl
 -syslog             syslog target, for example udp://127.0.0.1:514
 -syslog-tag         syslog app tag, default: psh
 -queue-size         async log queue size, default: 256
@@ -228,11 +237,10 @@ Each command produces one JSON object per line. Example:
 
 ## Notes
 
-- A local `pipery.jsonl` file is created by default, so logging works even with no extra configuration
-- The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags
+- A local `psh.jsonl` file is created by default, so logging works even with no extra configuration
+- The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, Docker image tags, and wiki sync timing
 - The included `Dockerfile` builds a reusable Debian slim-based image with `psh` installed at `/usr/local/bin/psh`
 - With no command arguments, piped stdin is treated as a line-by-line command source
 - Stdout and stderr are streamed to the terminal while also being captured for logging
 - Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected
 - The tool intentionally avoids blocking on log delivery; file or syslog failures are reported to stderr
-- Set `fail_on_error` or `-fail-on-error` to stop after the first non-zero command result, similar to shell errexit behavior for batch runs.
