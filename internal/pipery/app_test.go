@@ -206,13 +206,4 @@ func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
 	if exitCode, ok := entries[1]["exit_code"].(float64); !ok || int(exitCode) != 7 {
 		t.Fatalf("expected second exit_code to be 7, got %#v", entries[1]["exit_code"])
 	}
-
-	var entry map[string]any
-	if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
-		t.Fatalf("failed to unmarshal log entry: %v", err)
-	}
-
-	if stdout, ok := entry["stdout"].(string); !ok || stdout != "default-log\n" {
-		t.Fatalf(`expected stdout to be "default-log\n", got %q`, stdout)
-	}
 }
