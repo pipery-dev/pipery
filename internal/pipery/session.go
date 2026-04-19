@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/chzyer/readline"
 )
 
 // session represents one logical shell session.
@@ -89,6 +91,12 @@ func newSession(cfg sessionConfig) (*session, error) {
 // This is line-oriented input rather than a full pseudo-terminal shell. That
 // keeps the implementation simpler while still supporting useful workflows.
 func (s *session) runREPL(input io.Reader, showPrompt bool) (int, error) {
+	if showPrompt {
+		if exitCode, err, handled := s.runInteractiveREPL(input); handled {
+			return exitCode, err
+		}
+	}
+
 	reader := bufio.NewReader(input)
 	lastExitCode := 0
 	mode := "interactive"
@@ -147,6 +155,73 @@ func (s *session) runREPL(input io.Reader, showPrompt bool) (int, error) {
 			// If the final line did not end with a newline, we still execute it
 			// once and then stop.
 			return lastExitCode, nil
+		}
+	}
+}
+
+func (s *session) runInteractiveREPL(input io.Reader) (int, error, bool) {
+	stdinFile, ok := input.(*os.File)
+	if !ok {
+		return 0, nil, false
+	}
+
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:                 s.prompt,
+		AutoComplete:           newShellAutoCompleter(s),
+		InterruptPrompt:        "^C",
+		EOFPrompt:              "exit",
+		Stdin:                  stdinFile,
+		Stdout:                 s.stdout,
+		Stderr:                 s.stderr,
+		DisableAutoSaveHistory: true,
+		HistoryLimit:           -1,
+	})
+	if err != nil {
+		return 0, err, true
+	}
+	defer rl.Close()
+
+	lastExitCode := 0
+	for {
+		line, err := rl.Readline()
+		if err != nil {
+			if errors.Is(err, readline.ErrInterrupt) {
+				if strings.TrimSpace(line) == "" {
+					if _, writeErr := io.WriteString(s.stdout, "\n"); writeErr != nil {
+						return 1, writeErr, true
+					}
+				}
+				continue
+			}
+
+			if errors.Is(err, io.EOF) {
+				if _, writeErr := io.WriteString(s.stdout, "\n"); writeErr != nil {
+					return 1, writeErr, true
+				}
+				return lastExitCode, nil, true
+			}
+
+			return 1, err, true
+		}
+
+		result, shouldExit, runErr := s.runLine(line, lineRunOptions{
+			allowBuiltins: true,
+			mode:          "interactive",
+		})
+		if runErr != nil {
+			return 1, runErr, true
+		}
+
+		if result.ExitCode != 0 || strings.TrimSpace(line) != "" {
+			lastExitCode = result.ExitCode
+		}
+
+		if s.failOnError && result.ExitCode != 0 {
+			return result.ExitCode, nil, true
+		}
+
+		if shouldExit {
+			return result.ExitCode, nil, true
 		}
 	}
 }
