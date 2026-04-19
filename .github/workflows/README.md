@@ -28,11 +28,14 @@ On successful main-branch pushes, it also:
 
 ## Wiki sync behavior
 
-The wiki sync job treats repository docs as the source of truth. After a successful release it:
+The wiki sync job now uses `Andrew-Chen-Wang/github-wiki-action@v5.0.4` from the GitHub Marketplace.
 
-- clones the repo wiki
-- copies selected Markdown files into wiki page names
-- refreshes `_Sidebar.md`
-- commits and pushes only if the generated wiki content changed
+The job:
 
-That keeps the wiki aligned with the versioned docs in the main branch instead of manually editing two separate documentation sources.
+- prepares a local `wiki/` folder from repository docs
+- maps `README.md` to `Home.md`
+- writes `_Sidebar.md` explicitly so the wiki nav stays stable
+- publishes the generated pages to `https://github.com/pipery-dev/pipery/wiki`
+- skips empty commits when nothing changed
+
+Because the wiki action expects the Git-based wiki backend to already exist, the repository wiki needs at least one manually created starter page before the automation can push updates successfully.
