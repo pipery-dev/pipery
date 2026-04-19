@@ -119,7 +119,7 @@ func TestAppRunCreatesDefaultLogFile(t *testing.T) {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
 	}
 
-	logPath := filepath.Join(tempDir, "psh.jsonl")
+	logPath := filepath.Join(tempDir, "pipery.jsonl")
 	file, err := os.Open(logPath)
 	if err != nil {
 		t.Fatalf("Open returned error: %v", err)
@@ -143,7 +143,7 @@ func TestAppRunCreatesDefaultLogFile(t *testing.T) {
 
 func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
 	tempDir := t.TempDir()
-	logPath := filepath.Join(tempDir, "psh.jsonl")
+	logPath := filepath.Join(tempDir, "pipery.jsonl")
 
 	oldWD, err := os.Getwd()
 	if err != nil {

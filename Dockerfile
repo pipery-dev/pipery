@@ -21,9 +21,6 @@ RUN apt-get update \
 
 COPY --from=builder /out/psh /usr/local/bin/psh
 
-RUN groupadd -r psh && useradd --no-log-init -r -g psh psh
-USER psh
-
 WORKDIR /workspace
 
 ENTRYPOINT ["psh"]

@@ -73,7 +73,7 @@ Log to a file and syslog:
 
 ```bash
 ./psh \
-  -log-file ./psh.jsonl \
+  -log-file ./pipery.jsonl \
   -syslog udp://127.0.0.1:514 \
   -c "echo hello"
 ```
@@ -164,7 +164,7 @@ All other lines are executed through the configured shell, which defaults to `$S
 
 Logs are written asynchronously through a bounded queue so command completion is not blocked by file or syslog writes.
 
-- Default log file: `./psh.jsonl`
+- Default log file: `./pipery.jsonl`
 - Default queue size: `256`
 - Default capture size per stream: `262144` bytes
 - If the async queue fills up, new log entries are dropped and a summary is printed on shutdown
@@ -178,7 +178,7 @@ Logs are written asynchronously through a bounded queue so command completion is
 ```text
 -config             YAML config file path
 -c                  run a shell command; repeat to run multiple commands
--log-file           JSONL log file path, default: ./psh.jsonl
+-log-file           JSONL log file path, default: ./pipery.jsonl
 -syslog             syslog target, for example udp://127.0.0.1:514
 -syslog-tag         syslog app tag, default: psh
 -queue-size         async log queue size, default: 256
@@ -220,7 +220,7 @@ Each command produces one JSON object per line. Example:
 
 ## Notes
 
-- A local `psh.jsonl` file is created by default, so logging works even with no extra configuration
+- A local `pipery.jsonl` file is created by default, so logging works even with no extra configuration
 - The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags
 - The included `Dockerfile` builds a reusable Debian slim-based image with `psh` installed at `/usr/local/bin/psh`
 - With no command arguments, piped stdin is treated as a line-by-line command source
