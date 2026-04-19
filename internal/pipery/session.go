@@ -310,7 +310,7 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 		exitCode := deriveExitCode(err)
 		finishedAt := time.Now()
 
-		s.logger.Log(logEntry{
+		entry := logEntry{
 			Timestamp:      finishedAt,
 			StartedAt:      startedAt,
 			FinishedAt:     finishedAt,
@@ -326,7 +326,9 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 			Env:            mapToSortedEnvSlice(s.env),
 			ExitCode:       exitCode,
 			Error:          err.Error(),
-		})
+		}
+		applyResourceSnapshot(&entry, cachedSystemResources())
+		s.logger.Log(entry)
 
 		return executionResult{ExitCode: exitCode}, nil
 	}
@@ -384,6 +386,7 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 		Error:           entryErr,
 	}
 
+	applyResourceSnapshot(&entry, externalResourceSnapshot(cmd.ProcessState))
 	s.logger.Log(entry)
 
 	return executionResult{ExitCode: exitCode}, nil
@@ -435,7 +438,7 @@ func (s *session) runPwdBuiltin(rawCommand, mode string) executionResult {
 	_, _ = io.WriteString(s.stdout, output)
 	finishedAt := time.Now()
 
-	s.logger.Log(logEntry{
+	entry := logEntry{
 		Timestamp:      finishedAt,
 		StartedAt:      startedAt,
 		FinishedAt:     finishedAt,
@@ -451,7 +454,9 @@ func (s *session) runPwdBuiltin(rawCommand, mode string) executionResult {
 		Env:            mapToSortedEnvSlice(s.env),
 		Stdout:         output,
 		ExitCode:       0,
-	})
+	}
+	applyResourceSnapshot(&entry, builtinResourceSnapshot())
+	s.logger.Log(entry)
 
 	return executionResult{ExitCode: 0}
 }
@@ -472,7 +477,7 @@ func (s *session) runExitBuiltin(rawCommand, mode string) (executionResult, bool
 			_, _ = io.WriteString(s.stderr, stderr)
 			finishedAt := time.Now()
 
-			s.logger.Log(logEntry{
+			entry := logEntry{
 				Timestamp:      finishedAt,
 				StartedAt:      startedAt,
 				FinishedAt:     finishedAt,
@@ -489,7 +494,9 @@ func (s *session) runExitBuiltin(rawCommand, mode string) (executionResult, bool
 				Env:            mapToSortedEnvSlice(s.env),
 				Stderr:         stderr,
 				ExitCode:       2,
-			})
+			}
+			applyResourceSnapshot(&entry, builtinResourceSnapshot())
+			s.logger.Log(entry)
 
 			return executionResult{ExitCode: 2}, false
 		}
@@ -497,7 +504,7 @@ func (s *session) runExitBuiltin(rawCommand, mode string) (executionResult, bool
 	}
 
 	finishedAt := time.Now()
-	s.logger.Log(logEntry{
+	entry := logEntry{
 		Timestamp:      finishedAt,
 		StartedAt:      startedAt,
 		FinishedAt:     finishedAt,
@@ -513,7 +520,9 @@ func (s *session) runExitBuiltin(rawCommand, mode string) (executionResult, bool
 		BeforeEnv:      beforeEnv,
 		Env:            mapToSortedEnvSlice(s.env),
 		ExitCode:       code,
-	})
+	}
+	applyResourceSnapshot(&entry, builtinResourceSnapshot())
+	s.logger.Log(entry)
 
 	return executionResult{ExitCode: code}, true
 }
@@ -554,7 +563,7 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 		_, _ = io.WriteString(s.stderr, stderr)
 		finishedAt := time.Now()
 
-		s.logger.Log(logEntry{
+		entry := logEntry{
 			Timestamp:      finishedAt,
 			StartedAt:      startedAt,
 			FinishedAt:     finishedAt,
@@ -571,7 +580,9 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 			Env:            mapToSortedEnvSlice(s.env),
 			Stderr:         stderr,
 			ExitCode:       1,
-		})
+		}
+		applyResourceSnapshot(&entry, builtinResourceSnapshot())
+		s.logger.Log(entry)
 
 		return executionResult{ExitCode: 1}
 	}
@@ -581,7 +592,7 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 		_, _ = io.WriteString(s.stderr, stderr)
 		finishedAt := time.Now()
 
-		s.logger.Log(logEntry{
+		entry := logEntry{
 			Timestamp:      finishedAt,
 			StartedAt:      startedAt,
 			FinishedAt:     finishedAt,
@@ -598,14 +609,16 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 			Env:            mapToSortedEnvSlice(s.env),
 			Stderr:         stderr,
 			ExitCode:       1,
-		})
+		}
+		applyResourceSnapshot(&entry, builtinResourceSnapshot())
+		s.logger.Log(entry)
 
 		return executionResult{ExitCode: 1}
 	}
 
 	s.cwd = target
 	finishedAt := time.Now()
-	s.logger.Log(logEntry{
+	entry := logEntry{
 		Timestamp:      finishedAt,
 		StartedAt:      startedAt,
 		FinishedAt:     finishedAt,
@@ -621,7 +634,9 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 		BeforeEnv:      beforeEnv,
 		Env:            mapToSortedEnvSlice(s.env),
 		ExitCode:       0,
-	})
+	}
+	applyResourceSnapshot(&entry, builtinResourceSnapshot())
+	s.logger.Log(entry)
 
 	return executionResult{ExitCode: 0}
 }
@@ -644,7 +659,7 @@ func (s *session) runExportBuiltin(rawCommand, mode string) executionResult {
 		_, _ = io.WriteString(s.stderr, stderr)
 		finishedAt := time.Now()
 
-		s.logger.Log(logEntry{
+		entry := logEntry{
 			Timestamp:      finishedAt,
 			StartedAt:      startedAt,
 			FinishedAt:     finishedAt,
@@ -660,14 +675,16 @@ func (s *session) runExportBuiltin(rawCommand, mode string) executionResult {
 			Env:            mapToSortedEnvSlice(s.env),
 			Stderr:         stderr,
 			ExitCode:       2,
-		})
+		}
+		applyResourceSnapshot(&entry, builtinResourceSnapshot())
+		s.logger.Log(entry)
 
 		return executionResult{ExitCode: 2}
 	}
 
 	s.env[key] = value
 	finishedAt := time.Now()
-	s.logger.Log(logEntry{
+	entry := logEntry{
 		Timestamp:      finishedAt,
 		StartedAt:      startedAt,
 		FinishedAt:     finishedAt,
@@ -683,7 +700,9 @@ func (s *session) runExportBuiltin(rawCommand, mode string) executionResult {
 		BeforeEnv:      beforeEnv,
 		Env:            mapToSortedEnvSlice(s.env),
 		ExitCode:       0,
-	})
+	}
+	applyResourceSnapshot(&entry, builtinResourceSnapshot())
+	s.logger.Log(entry)
 
 	return executionResult{ExitCode: 0}
 }
@@ -701,7 +720,7 @@ func (s *session) runUnsetBuiltin(rawCommand, mode string) executionResult {
 		_, _ = io.WriteString(s.stderr, stderr)
 		finishedAt := time.Now()
 
-		s.logger.Log(logEntry{
+		entry := logEntry{
 			Timestamp:      finishedAt,
 			StartedAt:      startedAt,
 			FinishedAt:     finishedAt,
@@ -717,14 +736,16 @@ func (s *session) runUnsetBuiltin(rawCommand, mode string) executionResult {
 			Env:            mapToSortedEnvSlice(s.env),
 			Stderr:         stderr,
 			ExitCode:       2,
-		})
+		}
+		applyResourceSnapshot(&entry, builtinResourceSnapshot())
+		s.logger.Log(entry)
 
 		return executionResult{ExitCode: 2}
 	}
 
 	delete(s.env, key)
 	finishedAt := time.Now()
-	s.logger.Log(logEntry{
+	entry := logEntry{
 		Timestamp:      finishedAt,
 		StartedAt:      startedAt,
 		FinishedAt:     finishedAt,
@@ -740,7 +761,9 @@ func (s *session) runUnsetBuiltin(rawCommand, mode string) executionResult {
 		BeforeEnv:      beforeEnv,
 		Env:            mapToSortedEnvSlice(s.env),
 		ExitCode:       0,
-	})
+	}
+	applyResourceSnapshot(&entry, builtinResourceSnapshot())
+	s.logger.Log(entry)
 
 	return executionResult{ExitCode: 0}
 }

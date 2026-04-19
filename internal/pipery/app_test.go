@@ -81,6 +81,15 @@ func TestAppRunExecutesCommandsFromPipedStdin(t *testing.T) {
 	if got := entries[0]["raw_command"]; got != "echo Hi" {
 		t.Fatalf("expected first raw_command %q, got %#v", "echo Hi", got)
 	}
+	if cores, ok := entries[0]["system_cpu_cores"].(float64); !ok || cores < 1 {
+		t.Fatalf("expected first entry system_cpu_cores to be present and positive, got %#v", entries[0]["system_cpu_cores"])
+	}
+	if memory, ok := entries[0]["system_memory_bytes"].(float64); !ok || memory < 1 {
+		t.Fatalf("expected first entry system_memory_bytes to be present and positive, got %#v", entries[0]["system_memory_bytes"])
+	}
+	if _, ok := entries[0]["process_max_rss_bytes"].(float64); !ok {
+		t.Fatalf("expected first entry process_max_rss_bytes to be present, got %#v", entries[0]["process_max_rss_bytes"])
+	}
 
 	if got := entries[1]["builtin"]; got != true {
 		t.Fatalf("expected second entry to be builtin, got %#v", got)

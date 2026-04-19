@@ -14,29 +14,34 @@ import (
 //
 // The JSON tags define the output shape written to the file sink and syslog.
 type logEntry struct {
-	Timestamp       time.Time `json:"timestamp"`
-	StartedAt       time.Time `json:"started_at"`
-	FinishedAt      time.Time `json:"finished_at"`
-	Duration        string    `json:"duration"`
-	DurationMillis  int64     `json:"duration_ms"`
-	Mode            string    `json:"mode"`
-	Builtin         bool      `json:"builtin"`
-	Command         string    `json:"command"`
-	Args            []string  `json:"args,omitempty"`
-	RawCommand      string    `json:"raw_command"`
-	BeforeCwd       string    `json:"before_cwd,omitempty"`
-	Cwd             string    `json:"cwd"`
-	BeforeEnv       []string  `json:"before_env,omitempty"`
-	Env             []string  `json:"env"`
-	Stdin           string    `json:"stdin,omitempty"`
-	StdinTruncated  bool      `json:"stdin_truncated,omitempty"`
-	Stdout          string    `json:"stdout,omitempty"`
-	StdoutTruncated bool      `json:"stdout_truncated,omitempty"`
-	Stderr          string    `json:"stderr,omitempty"`
-	StderrTruncated bool      `json:"stderr_truncated,omitempty"`
-	ExitCode        int       `json:"exit_code"`
-	PID             int       `json:"pid,omitempty"`
-	Error           string    `json:"error,omitempty"`
+	Timestamp        time.Time `json:"timestamp"`
+	StartedAt        time.Time `json:"started_at"`
+	FinishedAt       time.Time `json:"finished_at"`
+	Duration         string    `json:"duration"`
+	DurationMillis   int64     `json:"duration_ms"`
+	SystemCPUCores   int       `json:"system_cpu_cores,omitempty"`
+	SystemMemory     uint64    `json:"system_memory_bytes,omitempty"`
+	ProcessUserCPU   int64     `json:"process_user_cpu_ms,omitempty"`
+	ProcessSystemCPU int64     `json:"process_system_cpu_ms,omitempty"`
+	ProcessMaxRSS    uint64    `json:"process_max_rss_bytes,omitempty"`
+	Mode             string    `json:"mode"`
+	Builtin          bool      `json:"builtin"`
+	Command          string    `json:"command"`
+	Args             []string  `json:"args,omitempty"`
+	RawCommand       string    `json:"raw_command"`
+	BeforeCwd        string    `json:"before_cwd,omitempty"`
+	Cwd              string    `json:"cwd"`
+	BeforeEnv        []string  `json:"before_env,omitempty"`
+	Env              []string  `json:"env"`
+	Stdin            string    `json:"stdin,omitempty"`
+	StdinTruncated   bool      `json:"stdin_truncated,omitempty"`
+	Stdout           string    `json:"stdout,omitempty"`
+	StdoutTruncated  bool      `json:"stdout_truncated,omitempty"`
+	Stderr           string    `json:"stderr,omitempty"`
+	StderrTruncated  bool      `json:"stderr_truncated,omitempty"`
+	ExitCode         int       `json:"exit_code"`
+	PID              int       `json:"pid,omitempty"`
+	Error            string    `json:"error,omitempty"`
 }
 
 // sink is the minimal interface shared by every log destination.
@@ -96,6 +101,10 @@ func newAsyncLogger(sinks []sink, queueSize int, stderr io.Writer, cfg redaction
 // The select/default pattern is what makes this non-blocking: if the channel is
 // full, we immediately drop the entry and increment a counter.
 func (l *asyncLogger) Log(entry logEntry) {
+	if entry.SystemCPUCores == 0 || entry.SystemMemory == 0 {
+		applyResourceSnapshot(&entry, mergeResourceSnapshots(cachedSystemResources(), entry))
+	}
+
 	entry = l.redactor.redactLogEntry(entry)
 
 	select {
