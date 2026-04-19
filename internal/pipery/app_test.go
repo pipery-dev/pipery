@@ -205,5 +205,5 @@ func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
 	}
 	if exitCode, ok := entries[1]["exit_code"].(float64); !ok || int(exitCode) != 7 {
 		t.Fatalf("expected second exit_code to be 7, got %#v", entries[1]["exit_code"])
-	}
+  }
 }

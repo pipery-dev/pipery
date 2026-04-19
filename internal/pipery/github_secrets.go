@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const githubAPIVersion = "2022-11-28"
+const githubAPIVersion = "2026-03-10"
 
 type githubRepositorySecretsResponse struct {
 	TotalCount int `json:"total_count"`
