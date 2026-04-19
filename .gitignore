@@ -1,6 +1,7 @@
 # Go build outputs
 /main
 /pipery
+/psh 
 *.test
 *.out
 
