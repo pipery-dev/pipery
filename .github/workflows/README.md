@@ -1,12 +1,15 @@
 # CI and Release Workflow Guide
 
-The repository uses a single GitHub Actions workflow at `.github/workflows/ci.yml`.
+The repository uses two GitHub Actions workflows:
 
-## What the workflow does
+- `.github/workflows/ci.yml`: build, test, release, container publishing, and wiki sync
+- `.github/workflows/codeql.yml`: CodeQL code scanning for GitHub Actions and Go
+
+## CI workflow
 
 ### Pull requests and non-main pushes
 
-The workflow runs:
+The CI workflow runs:
 
 - version preparation from `VERSION`
 - formatting checks with `gofmt`
@@ -39,3 +42,20 @@ The job:
 - skips empty commits when nothing changed
 
 Because the wiki action expects the Git-based wiki backend to already exist, the repository wiki needs at least one manually created starter page before the automation can push updates successfully.
+
+## CodeQL workflow
+
+The CodeQL workflow is intentionally separate from CI so code scanning can evolve independently without complicating release logic.
+
+It analyzes:
+
+- `actions` with `build-mode: none`
+- `go` with `build-mode: autobuild`
+
+It runs on:
+
+- pushes to `main`
+- pull requests targeting `main`
+- a weekly schedule
+
+The Go matrix entry also sets up the Go toolchain from `go.mod` before initializing CodeQL, which helps keep the autobuild environment predictable.

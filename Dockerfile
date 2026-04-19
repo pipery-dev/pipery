@@ -24,4 +24,3 @@ COPY --from=builder /out/psh /usr/local/bin/psh
 WORKDIR /workspace
 
 ENTRYPOINT ["psh"]
-CMD ["-h"]
