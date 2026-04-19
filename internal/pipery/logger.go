@@ -133,16 +133,17 @@ func (r redactor) redactLogEntry(entry logEntry) logEntry {
 	}
 
 	entry.Env = redactedEnv
-	entry.RawCommand = scrubSecrets(entry.RawCommand, secretValues)
-	entry.Stdin = scrubSecrets(entry.Stdin, secretValues)
-	entry.Stdout = scrubSecrets(entry.Stdout, secretValues)
-	entry.Stderr = scrubSecrets(entry.Stderr, secretValues)
-	entry.Error = scrubSecrets(entry.Error, secretValues)
+	replacer := buildSecretReplacer(secretValues)
+	entry.RawCommand = replacer.Replace(entry.RawCommand)
+	entry.Stdin = replacer.Replace(entry.Stdin)
+	entry.Stdout = replacer.Replace(entry.Stdout)
+	entry.Stderr = replacer.Replace(entry.Stderr)
+	entry.Error = replacer.Replace(entry.Error)
 
 	if len(entry.Args) > 0 {
 		redactedArgs := make([]string, len(entry.Args))
 		for index, arg := range entry.Args {
-			redactedArgs[index] = scrubSecrets(arg, secretValues)
+			redactedArgs[index] = replacer.Replace(arg)
 		}
 		entry.Args = redactedArgs
 	}
@@ -150,12 +151,16 @@ func (r redactor) redactLogEntry(entry logEntry) logEntry {
 	return entry
 }
 
-func scrubSecrets(value string, secretValues []string) string {
-	redacted := value
-	for _, secret := range secretValues {
-		redacted = strings.ReplaceAll(redacted, secret, "[MASKED]")
+func buildSecretReplacer(secretValues []string) *strings.Replacer {
+	if len(secretValues) == 0 {
+		return strings.NewReplacer()
 	}
-	return redacted
+
+	replacements := make([]string, 0, len(secretValues)*2)
+	for _, secret := range secretValues {
+		replacements = append(replacements, secret, "[MASKED]")
+	}
+	return strings.NewReplacer(replacements...)
 }
 
 func shouldScrubValue(value string) bool {
@@ -221,15 +226,14 @@ func (r redactor) shouldMaskEnvVar(key string) bool {
 		"TOKEN",
 		"SECRET",
 		"PASSWORD",
-		"PASS",
 		"PRIVATE_KEY",
 		"API_KEY",
 		"ACCESS_KEY",
 		"SECRET_KEY",
 		"CREDENTIAL",
 		"CREDENTIALS",
-		"AUTH",
-		"PAT",
+		"AUTHORIZATION",
+		"AUTH_TOKEN",
 	}
 
 	for _, marker := range sensitiveMarkers {
@@ -260,7 +264,7 @@ func (l *asyncLogger) Close(timeout time.Duration) error {
 		}
 
 		if dropped := l.dropped.Load(); dropped > 0 {
-			fmt.Fprintf(l.stderr, "pipery: dropped %d log entries because the async queue was full\n", dropped)
+			fmt.Fprintf(l.stderr, "psh: dropped %d log entries because the async queue was full\n", dropped)
 		}
 	})
 
@@ -276,7 +280,7 @@ func (l *asyncLogger) run() {
 		// Each sink receives one JSON line per entry.
 		payload, err := json.Marshal(entry)
 		if err != nil {
-			fmt.Fprintf(l.stderr, "pipery: failed to encode log entry: %v\n", err)
+			fmt.Fprintf(l.stderr, "psh: failed to encode log entry: %v\n", err)
 			continue
 		}
 
@@ -284,7 +288,7 @@ func (l *asyncLogger) run() {
 
 		for _, currentSink := range l.sinks {
 			if err := currentSink.Write(payload); err != nil {
-				fmt.Fprintf(l.stderr, "pipery: failed to write log entry to %s: %v\n", currentSink.Name(), err)
+				fmt.Fprintf(l.stderr, "psh: failed to write log entry to %s: %v\n", currentSink.Name(), err)
 			}
 		}
 	}
@@ -294,7 +298,7 @@ func (l *asyncLogger) run() {
 func (l *asyncLogger) closeSinks() {
 	for _, currentSink := range l.sinks {
 		if err := currentSink.Close(); err != nil {
-			fmt.Fprintf(l.stderr, "pipery: failed to close %s: %v\n", currentSink.Name(), err)
+			fmt.Fprintf(l.stderr, "psh: failed to close %s: %v\n", currentSink.Name(), err)
 		}
 	}
 }

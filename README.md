@@ -1,6 +1,6 @@
-# pipery
+# pipery-shell
 
-`pipery` is a Go CLI that mediates shell command execution and records each run as structured JSON.
+`pipery-shell` is a Go CLI that mediates shell command execution and records each run as structured JSON. The shipped binary name is `psh`.
 
 Current version: `0.1.0` from [VERSION](VERSION)
 
@@ -17,49 +17,49 @@ It supports:
 ## Build
 
 ```bash
-go build ./cmd/pipery
+go build -o psh ./cmd/pipery
 ```
 
 Container image:
 
 ```bash
-docker build -t pipery:base .
+docker build -t psh:base .
 ```
 
 GitHub Actions:
 
 - Runs lint, tests, Go build, and Docker build on pushes and pull requests
 - Reads the release version from `VERSION`
-- Publishes the Docker image to `ghcr.io/<owner>/<repo>:0.1.0`, `:v0.1.0`, and `:latest` on pushes to `main`
+- Publishes multi-arch Docker images for `linux/amd64` and `linux/arm64` to `ghcr.io/pipery-dev/pipery:0.1.0`, `:v0.1.0`, and `:latest` on pushes to `main`
 - Creates a GitHub release and uploads a Linux AMD64 tarball on pushes to `main`
-- When pipery runs inside GitHub Actions and `GITHUB_TOKEN` can read Actions secrets metadata, it fetches repository secret names and uses them for additional masking
+- When `psh` runs inside GitHub Actions and `GITHUB_TOKEN` can read Actions secrets metadata, it fetches repository secret names and uses them for additional masking
 
 ## Usage
 
 Interactive mode:
 
 ```bash
-./pipery
+./psh
 ```
 
 Pipe commands into stdin:
 
 ```bash
-echo "echo Hi" | ./pipery
-printf 'echo one\npwd\n' | ./pipery
+echo "echo Hi" | ./psh
+printf 'echo one\npwd\n' | ./psh
 ```
 
 Run shell commands:
 
 ```bash
-./pipery -c "echo hello"
-./pipery -c "cd /tmp" -c "pwd"
+./psh -c "echo hello"
+./psh -c "cd /tmp" -c "pwd"
 ```
 
 Run a program directly:
 
 ```bash
-./pipery -- ls -la
+./psh -- ls -la
 ```
 
 Run from Docker:
@@ -72,15 +72,15 @@ echo "echo hi" | docker run --rm -i -v "$PWD:/workspace" pipery:base
 Published image tags use the repo version:
 
 ```bash
-docker pull ghcr.io/<owner>/<repo>:0.1.0
-docker pull ghcr.io/<owner>/<repo>:v0.1.0
-docker pull ghcr.io/<owner>/<repo>:latest
+docker pull ghcr.io/pipery-dev/pipery:0.1.0
+docker pull ghcr.io/pipery-dev/pipery:v0.1.0
+docker pull ghcr.io/pipery-dev/pipery:latest
 ```
 
 Log to a file and syslog:
 
 ```bash
-./pipery \
+./psh \
   -log-file ./pipery.jsonl \
   -syslog udp://127.0.0.1:514 \
   -c "echo hello"
@@ -89,13 +89,13 @@ Log to a file and syslog:
 Pipe stdin through a single command and capture it:
 
 ```bash
-printf 'hello\n' | ./pipery -c "cat"
+printf 'hello\n' | ./psh -c "cat"
 ```
 
 Use a YAML config file:
 
 ```bash
-./pipery -config ./.pipery/config.yaml
+./psh -config ./.pipery/config.yaml
 ```
 
 Or environment variables:
@@ -106,7 +106,7 @@ export PIPERY_QUEUE_SIZE=512
 export PIPERY_FLUSH_TIMEOUT=5s
 export PIPERY_SECRET_PREFIXES=ORG_,CI_
 export PIPERY_FAIL_ON_ERROR=true
-./pipery -c "echo hello"
+./psh -c "echo hello"
 ```
 
 ## Configuration
@@ -118,17 +118,18 @@ Configuration is loaded in this order:
 - `PIPERY_*` environment variables
 - CLI flags
 
-If you do not pass `-config`, pipery automatically looks for `./.pipery/config.yaml`.
+If you do not pass `-config`, `psh` automatically looks for `./.pipery/config.yaml`.
+
 Example `./.pipery/config.yaml`:
 
 ```yaml
 log_file: ./pipery.jsonl
 syslog: udp://127.0.0.1:514
-syslog_tag: pipery
+syslog_tag: psh
 queue_size: 256
 max_capture_bytes: 262144
 shell: /bin/zsh
-prompt: "pipery> "
+prompt: "psh> "
 flush_timeout: 3s
 fail_on_error: false
 secret_names:
@@ -176,8 +177,9 @@ Logs are written asynchronously through a bounded queue so command completion is
 - Default capture size per stream: `262144` bytes
 - If the async queue fills up, new log entries are dropped and a summary is printed on shutdown
 - Syslog targets accept `udp://host:port` or `tcp://host:port`
-- Secret env vars are masked automatically, and you can extend the matcher set with exact names, prefixes, and suffixes.
-- In GitHub Actions, repository secret names can also be discovered via the Actions secrets API; pipery still never receives secret values from GitHub, only names, and uses matching env vars to scrub captured outputs.
+- Secret env vars are masked automatically, and you can extend the matcher set with exact names, prefixes, and suffixes
+- In GitHub Actions, repository and shared organization secret names can also be discovered via the Actions secrets API; `psh` still never receives secret values from GitHub, only names, and uses matching env vars to scrub captured outputs
+- Set `fail_on_error` or `-fail-on-error` to stop after the first non-zero command result, similar to shell errexit behavior for batch runs
 
 ## Flags
 
@@ -186,16 +188,16 @@ Logs are written asynchronously through a bounded queue so command completion is
 -c                  run a shell command; repeat to run multiple commands
 -log-file           JSONL log file path, default: ./pipery.jsonl
 -syslog             syslog target, for example udp://127.0.0.1:514
--syslog-tag         syslog app tag, default: pipery
+-syslog-tag         syslog app tag, default: psh
 -queue-size         async log queue size, default: 256
 -max-capture-bytes  max bytes recorded for stdin/stdout/stderr, default: 262144
 -shell              shell path used for -c and REPL execution
--prompt             interactive prompt, default: pipery>
+-prompt             interactive prompt, default: psh>
 -fail-on-error      stop the session when a command exits non-zero
 -flush-timeout      max time to wait for async log flush on exit, default: 3s
--secret-names      comma-separated env var names to always mask in logs
--secret-prefixes   comma-separated env var prefixes to mask in logs
--secret-suffixes   comma-separated env var suffixes to mask in logs
+-secret-names       comma-separated env var names to always mask in logs
+-secret-prefixes    comma-separated env var prefixes to mask in logs
+-secret-suffixes    comma-separated env var suffixes to mask in logs
 ```
 
 ## Log format
@@ -226,12 +228,11 @@ Each command produces one JSON object per line. Example:
 
 ## Notes
 
-- A local `pipery.jsonl` file is created by default, so logging works even with no extra configuration.
-- The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags.
-- The included `Dockerfile` builds a reusable Debian slim-based image with `pipery` installed at `/usr/local/bin/pipery`.
-- The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags.
-- With no command arguments, piped stdin is treated as a line-by-line command source.
-- Stdout and stderr are streamed to the terminal while also being captured for logging.
-- Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected.
-- The tool intentionally avoids blocking on log delivery; file or syslog failures are reported to stderr.
+- A local `pipery.jsonl` file is created by default, so logging works even with no extra configuration
+- The GitHub Actions release workflow uses the `VERSION` file as the source of truth for the Git tag, GitHub release, and Docker image tags
+- The included `Dockerfile` builds a reusable Debian slim-based image with `psh` installed at `/usr/local/bin/psh`
+- With no command arguments, piped stdin is treated as a line-by-line command source
+- Stdout and stderr are streamed to the terminal while also being captured for logging
+- Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected
+- The tool intentionally avoids blocking on log delivery; file or syslog failures are reported to stderr
 - Set `fail_on_error` or `-fail-on-error` to stop after the first non-zero command result, similar to shell errexit behavior for batch runs.

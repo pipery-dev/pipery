@@ -27,7 +27,7 @@ func main() {
 	}
 
 	// The exit code is part of the CLI contract. Returning the child command's
-	// exit code makes pipery behave like a command mediator instead of hiding
+	// exit code makes psh behave like a command mediator instead of hiding
 	// failures behind its own success/failure.
 	os.Exit(exitCode)
 }

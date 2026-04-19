@@ -80,7 +80,7 @@ func parseArgs(args []string, output io.Writer) (config, []string, []string, boo
 
 	var commands stringListFlag
 	overrides := flagOverrides{}
-	flags := flag.NewFlagSet("pipery", flag.ContinueOnError)
+	flags := flag.NewFlagSet("psh", flag.ContinueOnError)
 
 	// We suppress the flag package's default output because we want to control
 	// the help/error text ourselves and keep it consistent.
@@ -119,21 +119,21 @@ func parseArgs(args []string, output io.Writer) (config, []string, []string, boo
 	// These validation checks keep invalid config from reaching deeper layers
 	// where the failure would be harder to understand.
 	if cfg.QueueSize < 1 {
-		return cfg, nil, nil, false, errors.New("pipery: -queue-size must be at least 1")
+		return cfg, nil, nil, false, errors.New("psh: -queue-size must be at least 1")
 	}
 
 	if cfg.MaxCaptureBytes < 0 {
-		return cfg, nil, nil, false, errors.New("pipery: -max-capture-bytes must be zero or greater")
+		return cfg, nil, nil, false, errors.New("psh: -max-capture-bytes must be zero or greater")
 	}
 
 	if cfg.FlushTimeout < 0 {
-		return cfg, nil, nil, false, errors.New("pipery: -flush-timeout must be zero or greater")
+		return cfg, nil, nil, false, errors.New("psh: -flush-timeout must be zero or greater")
 	}
 
 	directCommand := flags.Args()
 	if len(commands) > 0 && len(directCommand) > 0 {
 		// Mixing the two modes is ambiguous, so we reject it early.
-		return cfg, nil, nil, false, errors.New("pipery: use either repeated -c commands or a direct command after --, not both")
+		return cfg, nil, nil, false, errors.New("psh: use either repeated -c commands or a direct command after --, not both")
 	}
 
 	return cfg, commands, directCommand, false, nil
@@ -144,11 +144,11 @@ func parseArgs(args []string, output io.Writer) (config, []string, []string, boo
 func defaultConfig() config {
 	return config{
 		LogFile:         "pipery.jsonl",
-		SyslogTag:       "pipery",
+		SyslogTag:       "psh",
 		QueueSize:       256,
 		MaxCaptureBytes: 256 * 1024,
 		Shell:           defaultShell(),
-		Prompt:          "pipery> ",
+		Prompt:          "psh> ",
 		FailOnError:     false,
 		FlushTimeout:    3 * time.Second,
 		SecretNames:     nil,
@@ -327,7 +327,7 @@ func discoverDefaultConfigFile(dir string) (string, error) {
 		info, err := os.Stat(candidate)
 		if err == nil {
 			if info.IsDir() {
-				return "", fmt.Errorf("pipery: config path %q is a directory, expected a file", candidate)
+				return "", fmt.Errorf("psh: config path %q is a directory, expected a file", candidate)
 			}
 			return candidate, nil
 		}
@@ -341,15 +341,15 @@ func discoverDefaultConfigFile(dir string) (string, error) {
 
 // usageText builds the help text shown for -h / -help.
 func usageText(shell string) string {
-	return fmt.Sprintf(`pipery mediates shell commands and records structured execution logs.
+	return fmt.Sprintf(`psh mediates shell commands and records structured execution logs.
 
 Usage:
-  pipery
-  echo "echo Hi" | pipery
-  pipery -config ./.pipery/config.yaml
-  pipery -c "echo hello"
-  pipery -c "cd /tmp" -c "pwd"
-  pipery -- ls -la
+  psh
+  echo "echo Hi" | psh
+  psh -config ./.pipery/config.yaml
+  psh -c "echo hello"
+  psh -c "cd /tmp" -c "pwd"
+  psh -- ls -la
 
 Modes:
   No command arguments starts a line-oriented REPL.

@@ -48,7 +48,7 @@ func TestAppRunExecutesCommandsFromPipedStdin(t *testing.T) {
 	if got := stdout.String(); got != "Hi\n"+expectedWD+"\n" {
 		t.Fatalf("unexpected stdout %q", got)
 	}
-	if got := stderr.String(); !strings.Contains(got, "pipery summary: mode=stdin commands=2 failed=0 exit_code=0") {
+	if got := stderr.String(); !strings.Contains(got, "psh summary: mode=stdin commands=2 failed=0 exit_code=0") {
 		t.Fatalf("expected run summary in stderr, got %q", got)
 	}
 
@@ -174,7 +174,7 @@ func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
 	if got := stdout.String(); got != "before\n" {
 		t.Fatalf("expected fail-on-error to stop before the final command, got stdout %q", got)
 	}
-	if got := stderr.String(); !strings.Contains(got, "pipery summary: mode=stdin commands=2 failed=1 exit_code=7") {
+	if got := stderr.String(); !strings.Contains(got, "psh summary: mode=stdin commands=2 failed=1 exit_code=7") {
 		t.Fatalf("expected failing run summary in stderr, got %q", got)
 	}
 
@@ -185,14 +185,25 @@ func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
-	lineCount := 0
+	var entries []map[string]any
 	for scanner.Scan() {
-		lineCount++
+		var entry map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			t.Fatalf("failed to unmarshal log entry: %v", err)
+		}
+		entries = append(entries, entry)
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatalf("scanner returned error: %v", err)
 	}
-	if lineCount != 2 {
-		t.Fatalf("expected 2 log entries when fail-on-error stops the session, got %d", lineCount)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 log entries when fail-on-error stops the session, got %d", len(entries))
 	}
+
+	if stdout, ok := entries[0]["stdout"].(string); !ok || stdout != "before\n" {
+		t.Fatalf(`expected first stdout to be "before\n", got %q`, stdout)
+	}
+	if exitCode, ok := entries[1]["exit_code"].(float64); !ok || int(exitCode) != 7 {
+		t.Fatalf("expected second exit_code to be 7, got %#v", entries[1]["exit_code"])
+  }
 }
