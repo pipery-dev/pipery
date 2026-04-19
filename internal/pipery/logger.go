@@ -24,7 +24,9 @@ type logEntry struct {
 	Command         string    `json:"command"`
 	Args            []string  `json:"args,omitempty"`
 	RawCommand      string    `json:"raw_command"`
+	BeforeCwd       string    `json:"before_cwd,omitempty"`
 	Cwd             string    `json:"cwd"`
+	BeforeEnv       []string  `json:"before_env,omitempty"`
 	Env             []string  `json:"env"`
 	Stdin           string    `json:"stdin,omitempty"`
 	StdinTruncated  bool      `json:"stdin_truncated,omitempty"`

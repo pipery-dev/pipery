@@ -273,6 +273,8 @@ func (s *session) runShellCommand(commandLine string, opts lineRunOptions) (exec
 // bounded copies for logging, waits for completion, and emits one log entry.
 func (s *session) runExternal(command string, args []string, input io.Reader, mode string, rawCommand string) (executionResult, error) {
 	startedAt := time.Now()
+	beforeCwd := s.cwd
+	beforeEnv := mapToSortedEnvSlice(s.env)
 
 	// These capped buffers let us keep useful log data without risking unlimited
 	// memory usage for very chatty commands.
@@ -318,7 +320,9 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 			Command:        command,
 			Args:           args,
 			RawCommand:     rawCommand,
+			BeforeCwd:      beforeCwd,
 			Cwd:            s.cwd,
+			BeforeEnv:      append([]string(nil), beforeEnv...),
 			Env:            mapToSortedEnvSlice(s.env),
 			ExitCode:       exitCode,
 			Error:          err.Error(),
@@ -365,7 +369,9 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 		Command:         command,
 		Args:            args,
 		RawCommand:      rawCommand,
+		BeforeCwd:       beforeCwd,
 		Cwd:             s.cwd,
+		BeforeEnv:       append([]string(nil), beforeEnv...),
 		Env:             mapToSortedEnvSlice(s.env),
 		Stdin:           stdinCapture.String(),
 		StdinTruncated:  stdinCapture.Truncated(),
@@ -423,6 +429,8 @@ func (s *session) tryBuiltin(line string, mode string) (executionResult, bool, b
 // runPwdBuiltin prints the session's current working directory.
 func (s *session) runPwdBuiltin(rawCommand, mode string) executionResult {
 	startedAt := time.Now()
+	beforeCwd := s.cwd
+	beforeEnv := mapToSortedEnvSlice(s.env)
 	output := s.cwd + "\n"
 	_, _ = io.WriteString(s.stdout, output)
 	finishedAt := time.Now()
@@ -437,7 +445,9 @@ func (s *session) runPwdBuiltin(rawCommand, mode string) executionResult {
 		Builtin:        true,
 		Command:        "pwd",
 		RawCommand:     rawCommand,
+		BeforeCwd:      beforeCwd,
 		Cwd:            s.cwd,
+		BeforeEnv:      beforeEnv,
 		Env:            mapToSortedEnvSlice(s.env),
 		Stdout:         output,
 		ExitCode:       0,
@@ -450,6 +460,8 @@ func (s *session) runPwdBuiltin(rawCommand, mode string) executionResult {
 // REPL / command loop should stop.
 func (s *session) runExitBuiltin(rawCommand, mode string) (executionResult, bool) {
 	startedAt := time.Now()
+	beforeCwd := s.cwd
+	beforeEnv := mapToSortedEnvSlice(s.env)
 	code := 0
 	fields := strings.Fields(rawCommand)
 	if len(fields) > 1 {
@@ -471,7 +483,9 @@ func (s *session) runExitBuiltin(rawCommand, mode string) (executionResult, bool
 				Command:        fields[0],
 				Args:           fields[1:],
 				RawCommand:     rawCommand,
+				BeforeCwd:      beforeCwd,
 				Cwd:            s.cwd,
+				BeforeEnv:      beforeEnv,
 				Env:            mapToSortedEnvSlice(s.env),
 				Stderr:         stderr,
 				ExitCode:       2,
@@ -494,7 +508,9 @@ func (s *session) runExitBuiltin(rawCommand, mode string) (executionResult, bool
 		Command:        fields[0],
 		Args:           fields[1:],
 		RawCommand:     rawCommand,
+		BeforeCwd:      beforeCwd,
 		Cwd:            s.cwd,
+		BeforeEnv:      beforeEnv,
 		Env:            mapToSortedEnvSlice(s.env),
 		ExitCode:       code,
 	})
@@ -509,6 +525,8 @@ func (s *session) runExitBuiltin(rawCommand, mode string) (executionResult, bool
 // later child commands care about.
 func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 	startedAt := time.Now()
+	beforeCwd := s.cwd
+	beforeEnv := mapToSortedEnvSlice(s.env)
 	target := strings.TrimSpace(strings.TrimPrefix(rawCommand, "cd"))
 	if target == "" {
 		// Plain `cd` behaves like a normal shell and goes to the user's home dir.
@@ -547,7 +565,9 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 			Command:        "cd",
 			Args:           []string{target},
 			RawCommand:     rawCommand,
+			BeforeCwd:      beforeCwd,
 			Cwd:            s.cwd,
+			BeforeEnv:      beforeEnv,
 			Env:            mapToSortedEnvSlice(s.env),
 			Stderr:         stderr,
 			ExitCode:       1,
@@ -572,7 +592,9 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 			Command:        "cd",
 			Args:           []string{target},
 			RawCommand:     rawCommand,
+			BeforeCwd:      beforeCwd,
 			Cwd:            s.cwd,
+			BeforeEnv:      beforeEnv,
 			Env:            mapToSortedEnvSlice(s.env),
 			Stderr:         stderr,
 			ExitCode:       1,
@@ -594,7 +616,9 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 		Command:        "cd",
 		Args:           []string{target},
 		RawCommand:     rawCommand,
+		BeforeCwd:      beforeCwd,
 		Cwd:            s.cwd,
+		BeforeEnv:      beforeEnv,
 		Env:            mapToSortedEnvSlice(s.env),
 		ExitCode:       0,
 	})
@@ -606,6 +630,8 @@ func (s *session) runCdBuiltin(rawCommand, mode string) executionResult {
 // processes inherit it.
 func (s *session) runExportBuiltin(rawCommand, mode string) executionResult {
 	startedAt := time.Now()
+	beforeCwd := s.cwd
+	beforeEnv := mapToSortedEnvSlice(s.env)
 	assignment := strings.TrimSpace(strings.TrimPrefix(rawCommand, "export"))
 	key, value, ok := strings.Cut(assignment, "=")
 	key = strings.TrimSpace(key)
@@ -628,7 +654,9 @@ func (s *session) runExportBuiltin(rawCommand, mode string) executionResult {
 			Builtin:        true,
 			Command:        "export",
 			RawCommand:     rawCommand,
+			BeforeCwd:      beforeCwd,
 			Cwd:            s.cwd,
+			BeforeEnv:      beforeEnv,
 			Env:            mapToSortedEnvSlice(s.env),
 			Stderr:         stderr,
 			ExitCode:       2,
@@ -650,7 +678,9 @@ func (s *session) runExportBuiltin(rawCommand, mode string) executionResult {
 		Command:        "export",
 		Args:           []string{assignment},
 		RawCommand:     rawCommand,
+		BeforeCwd:      beforeCwd,
 		Cwd:            s.cwd,
+		BeforeEnv:      beforeEnv,
 		Env:            mapToSortedEnvSlice(s.env),
 		ExitCode:       0,
 	})
@@ -661,6 +691,8 @@ func (s *session) runExportBuiltin(rawCommand, mode string) executionResult {
 // runUnsetBuiltin removes one variable from the session environment.
 func (s *session) runUnsetBuiltin(rawCommand, mode string) executionResult {
 	startedAt := time.Now()
+	beforeCwd := s.cwd
+	beforeEnv := mapToSortedEnvSlice(s.env)
 	key := strings.TrimSpace(strings.TrimPrefix(rawCommand, "unset"))
 	key = stripWrappingQuotes(key)
 
@@ -679,7 +711,9 @@ func (s *session) runUnsetBuiltin(rawCommand, mode string) executionResult {
 			Builtin:        true,
 			Command:        "unset",
 			RawCommand:     rawCommand,
+			BeforeCwd:      beforeCwd,
 			Cwd:            s.cwd,
+			BeforeEnv:      beforeEnv,
 			Env:            mapToSortedEnvSlice(s.env),
 			Stderr:         stderr,
 			ExitCode:       2,
@@ -701,7 +735,9 @@ func (s *session) runUnsetBuiltin(rawCommand, mode string) executionResult {
 		Command:        "unset",
 		Args:           []string{key},
 		RawCommand:     rawCommand,
+		BeforeCwd:      beforeCwd,
 		Cwd:            s.cwd,
+		BeforeEnv:      beforeEnv,
 		Env:            mapToSortedEnvSlice(s.env),
 		ExitCode:       0,
 	})
