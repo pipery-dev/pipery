@@ -182,9 +182,7 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" --clobber
           else
-            gh release create "$TAG" "$ASSET" \
-              --title "psh $TAG" \
-              --generate-notes
+            gh release create "$TAG" "$ASSET"               --title "psh $TAG"               --generate-notes
           fi
 
   release-image:
@@ -254,27 +252,17 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Publish repository docs to wiki
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPOSITORY: ${{ github.repository }}
+      - name: Prepare wiki content
         run: |
-          set -eu
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          tmpdir="$(mktemp -d)"
-          wiki_dir="$tmpdir/wiki"
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.wiki.git" "$wiki_dir"
-
-          cp README.md "$wiki_dir/Home.md"
-          cp Dockerfile.md "$wiki_dir/Docker-Image.md"
-          cp cmd/README.md "$wiki_dir/CLI-Entrypoint.md"
-          cp internal/README.md "$wiki_dir/Internal-Packages.md"
-          cp internal/pipery/README.md "$wiki_dir/Core-Package.md"
-          cp .github/workflows/README.md "$wiki_dir/CI-Workflow.md"
-
-          cat > "$wiki_dir/_Sidebar.md" <<'EOF'
+          rm -rf wiki
+          mkdir -p wiki
+          cp README.md wiki/Home.md
+          cp Dockerfile.md wiki/Docker-Image.md
+          cp cmd/README.md wiki/CLI-Entrypoint.md
+          cp internal/README.md wiki/Internal-Packages.md
+          cp internal/pipery/README.md wiki/Core-Package.md
+          cp .github/workflows/README.md wiki/CI-Workflow.md
+          cat > wiki/_Sidebar.md <<'EOF'
           * [Home](Home)
           * [Docker Image](Docker-Image)
           * [CLI Entrypoint](CLI-Entrypoint)
@@ -283,11 +271,12 @@ jobs:
           * [CI Workflow](CI-Workflow)
           EOF
 
-          cd "$wiki_dir"
-          if [ -n "$(git status --short)" ]; then
-            git add Home.md Docker-Image.md CLI-Entrypoint.md Internal-Packages.md Core-Package.md CI-Workflow.md _Sidebar.md
-            git commit -m "Update wiki from repository docs"
-            git push origin HEAD
-          else
-            echo "Wiki is already up to date"
-          fi
+      - name: Publish wiki with GitHub Wiki Action
+        uses: Andrew-Chen-Wang/github-wiki-action@v5.0.4
+        with:
+          path: wiki/
+          strategy: clone
+          token: ${{ github.token }}
+          preprocess: false
+          disable-empty-commits: true
+          commit-message: "Update wiki from repository docs (${{ needs.prepare-version.outputs.tag }})"
