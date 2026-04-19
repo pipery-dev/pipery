@@ -31,7 +31,7 @@ On successful main-branch pushes, it also:
 
 ## Wiki sync behavior
 
-The wiki sync job uses `Andrew-Chen-Wang/github-wiki-action@v5.0.4`.
+The wiki sync job now uses `Andrew-Chen-Wang/github-wiki-action@v5.0.4` from the GitHub Marketplace.
 
 The job:
 
