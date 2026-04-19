@@ -11,7 +11,6 @@ The multi-stage Dockerfile keeps the final image small:
 3. Builds the CLI from `./cmd/pipery` into `/out/psh`.
 4. Copies only the final binary into `debian:bookworm-slim`.
 5. Installs `ca-certificates` so HTTPS and similar integrations can work cleanly in derived images.
-6. Does not copy repository source code into the final runtime image.
 
 ## Runtime shape
 
