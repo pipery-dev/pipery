@@ -154,8 +154,8 @@ jobs:
       - name: Build release artifact
         run: |
           mkdir -p dist
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/pipery ./cmd/pipery
-          tar -C dist -czf "dist/pipery-${{ needs.prepare-version.outputs.version }}-linux-amd64.tar.gz" pipery
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/psh ./cmd/pipery
+          tar -C dist -czf "dist/psh-${{ needs.prepare-version.outputs.version }}-linux-amd64.tar.gz" psh
 
       - name: Create Git tag if needed
         env:
@@ -178,12 +178,12 @@ jobs:
           TAG: ${{ needs.prepare-version.outputs.tag }}
           VERSION: ${{ needs.prepare-version.outputs.version }}
         run: |
-          ASSET="dist/pipery-${VERSION}-linux-amd64.tar.gz"
+          ASSET="dist/psh-${VERSION}-linux-amd64.tar.gz"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET" --clobber
           else
             gh release create "$TAG" "$ASSET" \
-              --title "pipery $TAG" \
+              --title "psh $TAG" \
               --generate-notes
           fi
 
@@ -238,3 +238,56 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  sync-wiki:
+    name: Sync Wiki
+    runs-on: ubuntu-latest
+    needs:
+      - prepare-version
+      - release-binary
+      - release-image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Publish repository docs to wiki
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -eu
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          tmpdir="$(mktemp -d)"
+          wiki_dir="$tmpdir/wiki"
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.wiki.git" "$wiki_dir"
+
+          cp README.md "$wiki_dir/Home.md"
+          cp Dockerfile.md "$wiki_dir/Docker-Image.md"
+          cp cmd/README.md "$wiki_dir/CLI-Entrypoint.md"
+          cp internal/README.md "$wiki_dir/Internal-Packages.md"
+          cp internal/pipery/README.md "$wiki_dir/Core-Package.md"
+          cp .github/workflows/README.md "$wiki_dir/CI-Workflow.md"
+
+          cat > "$wiki_dir/_Sidebar.md" <<'EOF'
+          * [Home](Home)
+          * [Docker Image](Docker-Image)
+          * [CLI Entrypoint](CLI-Entrypoint)
+          * [Internal Packages](Internal-Packages)
+          * [Core Package](Core-Package)
+          * [CI Workflow](CI-Workflow)
+          EOF
+
+          cd "$wiki_dir"
+          if [ -n "$(git status --short)" ]; then
+            git add Home.md Docker-Image.md CLI-Entrypoint.md Internal-Packages.md Core-Package.md CI-Workflow.md _Sidebar.md
+            git commit -m "Update wiki from repository docs"
+            git push origin HEAD
+          else
+            echo "Wiki is already up to date"
+          fi
