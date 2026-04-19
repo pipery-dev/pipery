@@ -48,10 +48,45 @@ func TestCommandCompletionSuffixes(t *testing.T) {
 		t.Fatalf("write executable: %v", err)
 	}
 
-	got := commandCompletionSuffixes("ec", map[string]string{"PATH": binDir}, shellBuiltins)
+	got := commandCompletionSuffixes("ec", executablesOnPath(binDir), shellBuiltins)
 	want := []string{"ho"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commandCompletionSuffixes() = %v, want %v", got, want)
+	}
+}
+
+func TestShellAutoCompleterRefreshesCachedExecutablesWhenPathChanges(t *testing.T) {
+	t.Parallel()
+
+	firstBinDir := t.TempDir()
+	secondBinDir := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(firstBinDir, "echo"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write first executable: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secondBinDir, "printf"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write second executable: %v", err)
+	}
+
+	s := &session{
+		env: map[string]string{
+			"PATH": firstBinDir,
+		},
+	}
+	completer := newShellAutoCompleter(s).(*shellAutoCompleter)
+
+	got := commandCompletionSuffixes("ec", completer.executables(), shellBuiltins)
+	want := []string{"ho"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("first commandCompletionSuffixes() = %v, want %v", got, want)
+	}
+
+	s.env["PATH"] = secondBinDir
+
+	got = commandCompletionSuffixes("pri", completer.executables(), shellBuiltins)
+	want = []string{"ntf"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("second commandCompletionSuffixes() = %v, want %v", got, want)
 	}
 }
 

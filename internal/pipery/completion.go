@@ -19,7 +19,9 @@ var shellBuiltins = []string{
 }
 
 type shellAutoCompleter struct {
-	session *session
+	session           *session
+	cachedPathValue   string
+	cachedExecutables []string
 }
 
 func newShellAutoCompleter(s *session) readline.AutoCompleter {
@@ -38,7 +40,7 @@ func (c *shellAutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	if shouldCompletePath(token, commandPosition) {
 		suggestions = pathCompletionSuffixes(c.session.cwd, token, c.session.env["HOME"])
 	} else {
-		suggestions = commandCompletionSuffixes(token, c.session.env, shellBuiltins)
+		suggestions = commandCompletionSuffixes(token, c.executables(), shellBuiltins)
 	}
 
 	completions := make([][]rune, 0, len(suggestions))
@@ -46,7 +48,20 @@ func (c *shellAutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		completions = append(completions, []rune(suggestion))
 	}
 
-	return completions, len([]rune(token))
+	return completions, 0
+}
+
+func (c *shellAutoCompleter) executables() []string {
+	pathValue := c.session.env["PATH"]
+	if pathValue != c.cachedPathValue {
+		// PATH rarely changes during a shell session, so caching avoids a full
+		// directory scan on every Tab press while still refreshing promptly after
+		// commands like `export PATH=...`.
+		c.cachedPathValue = pathValue
+		c.cachedExecutables = executablesOnPath(pathValue)
+	}
+
+	return c.cachedExecutables
 }
 
 func completionContext(line string) (string, bool) {
@@ -122,7 +137,7 @@ func shouldCompletePath(token string, commandPosition bool) bool {
 	return !commandPosition
 }
 
-func commandCompletionSuffixes(fragment string, env map[string]string, builtins []string) []string {
+func commandCompletionSuffixes(fragment string, executables []string, builtins []string) []string {
 	seen := make(map[string]struct{})
 	candidates := make([]string, 0, len(builtins))
 
@@ -137,7 +152,7 @@ func commandCompletionSuffixes(fragment string, env map[string]string, builtins 
 		candidates = append(candidates, strings.TrimPrefix(builtin, fragment))
 	}
 
-	for _, executable := range executablesOnPath(env["PATH"]) {
+	for _, executable := range executables {
 		if !strings.HasPrefix(executable, fragment) {
 			continue
 		}
@@ -172,8 +187,12 @@ func executablesOnPath(pathValue string) []string {
 				continue
 			}
 
+			if entry.IsDir() {
+				continue
+			}
+
 			info, err := entry.Info()
-			if err != nil || info.IsDir() {
+			if err != nil {
 				continue
 			}
 

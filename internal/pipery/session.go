@@ -186,10 +186,8 @@ func (s *session) runInteractiveREPL(input io.Reader) (int, error, bool) {
 		line, err := rl.Readline()
 		if err != nil {
 			if errors.Is(err, readline.ErrInterrupt) {
-				if strings.TrimSpace(line) == "" {
-					if _, writeErr := io.WriteString(s.stdout, "\n"); writeErr != nil {
-						return 1, writeErr, true
-					}
+				if _, writeErr := io.WriteString(s.stdout, "^C\n"); writeErr != nil {
+					return 1, writeErr, true
 				}
 				continue
 			}
