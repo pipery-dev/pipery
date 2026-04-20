@@ -112,7 +112,9 @@ func decodeReplayEntry(line []byte) (logEntry, error) {
 	if entry.Cwd == "" {
 		return logEntry{}, errors.New("cwd must be non-empty")
 	}
-	for _, item := range entry.Env {
+	if len(entry.Env) == 0 {
+		return logEntry{}, errors.New("env must contain at least one variable")
+	}
 	for _, item := range entry.Env {
 		if !strings.Contains(item, "=") {
 			return logEntry{}, fmt.Errorf("env item %q must have KEY=VALUE format", item)
@@ -205,8 +207,10 @@ func replaySequence(template replayTrace, cfg config, logPath string) (runSummar
 	runStartedAt := time.Now()
 	lastExitCode := 0
 	failureCount := 0
+	executedCount := 0
 
 	for _, recorded := range template.Entries {
+		executedCount++
 		sessionEnv := append([]string(nil), recorded.BeforeEnv...)
 		currentSession, err := newSession(sessionConfig{
 			Shell:           cfg.Shell,
@@ -262,7 +266,7 @@ func replaySequence(template replayTrace, cfg config, logPath string) (runSummar
 		FinishedAt: time.Now(),
 		ExitCode:   lastExitCode,
 		Session: sessionSummary{
-			CommandCount: len(template.Entries),
+			CommandCount: executedCount,
 			FailureCount: failureCount,
 		},
 	}, nil
