@@ -23,14 +23,6 @@ type replayTrace struct {
 	Entries []logEntry
 }
 
-type replayCommandResult struct {
-	Index      int
-	RawCommand string
-	ExitCode   int
-	Stdout     string
-	Stderr     string
-}
-
 func loadReplayTrace(path string) (replayTrace, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -316,6 +308,12 @@ func renderOutputDiffs(traces []replayTrace) string {
 	for traceIndex := 1; traceIndex < len(traces); traceIndex++ {
 		candidate := traces[traceIndex]
 		for entryIndex := range baseline.Entries {
+
+			if entryIndex >= len(candidate.Entries) {
+				fmt.Fprintf(&builder, "run %s ended early at command %d\n", candidate.Path, entryIndex+1)
+				break
+			}
+
 			left := baseline.Entries[entryIndex]
 			right := candidate.Entries[entryIndex]
 
