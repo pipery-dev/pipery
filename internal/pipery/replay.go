@@ -202,7 +202,12 @@ func replaySequence(template replayTrace, cfg config, logPath string) (runSummar
 		return runSummary{}, err
 	}
 
-	logger := newAsyncLogger(sinks, cfg.QueueSize, io.Discard, redactionConfig{})
+	redaction := redactionConfig{
+		SecretNames:    cfg.SecretNames,
+		SecretPrefixes: cfg.SecretPrefixes,
+		SecretSuffixes: cfg.SecretSuffixes,
+	}
+	logger := newAsyncLogger(sinks, cfg.QueueSize, io.Discard, redaction)
 	defer logger.Close(cfg.FlushTimeout)
 
 	runStartedAt := time.Now()
