@@ -23,6 +23,8 @@ var (
 
 func cachedSystemResources() resourceSnapshot {
 	systemResourcesOnce.Do(func() {
+		// These machine-level facts do not change during the lifetime of psh, so
+		// we resolve them once and then reuse them for every log entry.
 		systemResources = resourceSnapshot{
 			SystemCPUCores: runtime.NumCPU(),
 			SystemMemory:   systemMemoryBytes(),
@@ -35,6 +37,9 @@ func cachedSystemResources() resourceSnapshot {
 func builtinResourceSnapshot() resourceSnapshot {
 	snapshot := cachedSystemResources()
 
+	// Built-ins run inside the psh process, so the lightest portable way to
+	// capture resource usage is a single Getrusage syscall after the builtin
+	// finishes. We intentionally avoid any background sampling or polling.
 	var usage syscall.Rusage
 	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
 		return snapshot
@@ -52,6 +57,9 @@ func externalResourceSnapshot(state *os.ProcessState) resourceSnapshot {
 		return snapshot
 	}
 
+	// For external commands we reuse the process accounting data that Wait has
+	// already made available through ProcessState. That keeps logging overhead to
+	// a minimum because there is no extra syscall here in the common case.
 	snapshot.ProcessUserCPU = durationToMillis(state.UserTime())
 	snapshot.ProcessSystemCPU = durationToMillis(state.SystemTime())
 
@@ -74,24 +82,4 @@ func applyResourceSnapshot(entry *logEntry, snapshot resourceSnapshot) {
 	entry.ProcessUserCPU = snapshot.ProcessUserCPU
 	entry.ProcessSystemCPU = snapshot.ProcessSystemCPU
 	entry.ProcessMaxRSS = snapshot.ProcessMaxRSS
-}
-
-func mergeResourceSnapshots(base resourceSnapshot, entry logEntry) resourceSnapshot {
-	if entry.SystemCPUCores != 0 {
-		base.SystemCPUCores = entry.SystemCPUCores
-	}
-	if entry.SystemMemory != 0 {
-		base.SystemMemory = entry.SystemMemory
-	}
-	if entry.ProcessUserCPU != 0 {
-		base.ProcessUserCPU = entry.ProcessUserCPU
-	}
-	if entry.ProcessSystemCPU != 0 {
-		base.ProcessSystemCPU = entry.ProcessSystemCPU
-	}
-	if entry.ProcessMaxRSS != 0 {
-		base.ProcessMaxRSS = entry.ProcessMaxRSS
-	}
-
-	return base
 }

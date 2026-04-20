@@ -101,8 +101,17 @@ func newAsyncLogger(sinks []sink, queueSize int, stderr io.Writer, cfg redaction
 // The select/default pattern is what makes this non-blocking: if the channel is
 // full, we immediately drop the entry and increment a counter.
 func (l *asyncLogger) Log(entry logEntry) {
+	// System-level machine facts are cached once and then copied into any entry
+	// that does not already have them. This keeps the async logging path cheap
+	// while still guaranteeing consistent metadata in the JSONL output.
 	if entry.SystemCPUCores == 0 || entry.SystemMemory == 0 {
-		applyResourceSnapshot(&entry, mergeResourceSnapshots(cachedSystemResources(), entry))
+		system := cachedSystemResources()
+		if entry.SystemCPUCores == 0 {
+			entry.SystemCPUCores = system.SystemCPUCores
+		}
+		if entry.SystemMemory == 0 {
+			entry.SystemMemory = system.SystemMemory
+		}
 	}
 
 	entry = l.redactor.redactLogEntry(entry)
