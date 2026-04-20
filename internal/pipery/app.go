@@ -60,6 +60,10 @@ func (a *App) Run(args []string) (int, error) {
 		return 0, nil
 	}
 
+	if len(cfg.ReplayFiles) > 0 {
+		return a.runReplay(cfg)
+	}
+
 	sinks, err := buildSinks(cfg)
 	if err != nil {
 		return 1, err
@@ -175,6 +179,42 @@ func (a *App) Run(args []string) (int, error) {
 		}
 		return finishRun(mode, exitCode)
 	}
+}
+
+func (a *App) runReplay(cfg config) (int, error) {
+	traces := make([]replayTrace, 0, len(cfg.ReplayFiles)+1)
+	for _, path := range cfg.ReplayFiles {
+		trace, err := loadReplayTrace(path)
+		if err != nil {
+			return 1, err
+		}
+		traces = append(traces, trace)
+	}
+
+	if err := ensureComparableReplayTraces(traces); err != nil {
+		return 1, err
+	}
+
+	replayPath, err := replayLogPath(cfg, traces[0].Path)
+	if err != nil {
+		return 1, err
+	}
+
+	summary, err := replaySequence(traces[0], cfg, replayPath)
+	if err != nil {
+		return 1, err
+	}
+
+	replayTrace, err := loadReplayTrace(replayPath)
+	if err != nil {
+		return 1, err
+	}
+	traces = append(traces, replayTrace)
+
+	fmt.Fprint(a.stdout, renderReplayComparison(traces))
+	a.printRunSummary(summary)
+
+	return summary.ExitCode, nil
 }
 
 func (a *App) printRunSummary(summary runSummary) {

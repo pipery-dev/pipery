@@ -80,6 +80,9 @@ func TestAsyncLoggerWritesJSONLine(t *testing.T) {
 	if got := entry["mode"]; got != "shell" {
 		t.Fatalf("expected mode %q, got %#v", "shell", got)
 	}
+	if cores, ok := entry["system_cpu_cores"].(float64); !ok || cores < 1 {
+		t.Fatalf("expected system_cpu_cores to be present and positive, got %#v", entry["system_cpu_cores"])
+	}
 }
 
 func TestParseSyslogTargetAddsDefaultPort(t *testing.T) {
