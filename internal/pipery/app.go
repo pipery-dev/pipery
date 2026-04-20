@@ -1,11 +1,14 @@
 package pipery
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -64,6 +67,13 @@ func (a *App) Run(args []string) (int, error) {
 		return a.runReplay(cfg)
 	}
 
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+	if cfg.SessionTimeout > 0 {
+		runCtx, cancelRun = context.WithTimeout(context.Background(), cfg.SessionTimeout)
+		defer cancelRun()
+	}
+
 	sinks, err := buildSinks(cfg)
 	if err != nil {
 		return 1, err
@@ -83,27 +93,18 @@ func (a *App) Run(args []string) (int, error) {
 
 	// A session carries mutable shell-like state across commands. For example,
 	// `cd` and `export` need to affect later commands in the same session.
-	currentSession, err := newSession(sessionConfig{
-		Shell:           cfg.Shell,
-		Env:             os.Environ(),
-		Stdout:          a.stdout,
-		Stderr:          a.stderr,
-		Logger:          logger,
-		MaxCaptureBytes: cfg.MaxCaptureBytes,
-		Prompt:          cfg.Prompt,
-		FailOnError:     cfg.FailOnError,
-	})
+	currentSession, err := a.newConfiguredSession(cfg, logger, runCtx, a.stdout, a.stderr)
 	if err != nil {
 		return 1, err
 	}
 
-	finishRun := func(mode string, exitCode int) (int, error) {
+	finishRun := func(mode string, exitCode int, summary sessionSummary) (int, error) {
 		a.printRunSummary(runSummary{
 			Mode:       mode,
 			StartedAt:  runStartedAt,
 			FinishedAt: time.Now(),
 			ExitCode:   exitCode,
-			Session:    currentSession.summary(),
+			Session:    summary,
 		})
 		return exitCode, nil
 	}
@@ -123,8 +124,19 @@ func (a *App) Run(args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-		return finishRun("direct", result.ExitCode)
+		return finishRun("direct", result.ExitCode, currentSession.summary())
 	case len(shellCommands) > 0:
+		if cfg.Parallelism > 1 && len(shellCommands) > 1 {
+			if !readerIsTerminal(a.stdin) {
+				return 1, errors.New("psh: parallel -c execution does not support shared piped stdin")
+			}
+			summary, exitCode, err := a.runParallelShellCommands(runCtx, cancelRun, cfg, logger, shellCommands)
+			if err != nil {
+				return 1, err
+			}
+			return finishRun("shell", exitCode, summary)
+		}
+
 		// Shell command mode executes each -c string in order through the
 		// configured shell. This gives us shell syntax like pipes, redirects,
 		// variable expansion, and multiple statements.
@@ -155,15 +167,21 @@ func (a *App) Run(args []string) (int, error) {
 			}
 
 			lastExitCode = result.ExitCode
+			if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+				return finishRun("shell", timeoutExitCode, currentSession.summary())
+			}
 			if cfg.FailOnError && result.ExitCode != 0 {
-				return finishRun("shell", result.ExitCode)
+				return finishRun("shell", result.ExitCode, currentSession.summary())
 			}
 			if shouldExit {
-				return finishRun("shell", result.ExitCode)
+				return finishRun("shell", result.ExitCode, currentSession.summary())
 			}
 		}
 
-		return finishRun("shell", lastExitCode)
+		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+			lastExitCode = timeoutExitCode
+		}
+		return finishRun("shell", lastExitCode, currentSession.summary())
 	default:
 		// With no command arguments, psh behaves like an interactive shell when
 		// stdin is a terminal, or like a line-by-line script runner when commands
@@ -177,11 +195,127 @@ func (a *App) Run(args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-		return finishRun(mode, exitCode)
+		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+			exitCode = timeoutExitCode
+		}
+		return finishRun(mode, exitCode, currentSession.summary())
 	}
 }
 
+func (a *App) newConfiguredSession(cfg config, logger *asyncLogger, ctx context.Context, stdout io.Writer, stderr io.Writer) (*session, error) {
+	return newSession(sessionConfig{
+		Shell:           cfg.Shell,
+		Env:             os.Environ(),
+		Stdout:          stdout,
+		Stderr:          stderr,
+		Logger:          logger,
+		MaxCaptureBytes: cfg.MaxCaptureBytes,
+		Prompt:          cfg.Prompt,
+		FailOnError:     cfg.FailOnError,
+		RetryCount:      cfg.RetryCount,
+		CommandTimeout:  cfg.CommandTimeout,
+		Context:         ctx,
+	})
+}
+
+func (a *App) runParallelShellCommands(runCtx context.Context, cancelRun context.CancelFunc, cfg config, logger *asyncLogger, commands []string) (sessionSummary, int, error) {
+	for _, command := range commands {
+		if startsWithBuiltin(command) {
+			return sessionSummary{}, 0, errors.New("psh: built-in commands cannot be combined with parallel -c execution")
+		}
+	}
+
+	type taskResult struct {
+		summary  sessionSummary
+		exitCode int
+		err      error
+	}
+
+	commandCh := make(chan string)
+	resultCh := make(chan taskResult, len(commands))
+	var workers sync.WaitGroup
+
+	workerCount := cfg.Parallelism
+	if workerCount > len(commands) {
+		workerCount = len(commands)
+	}
+
+	for worker := 0; worker < workerCount; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for commandLine := range commandCh {
+				currentSession, err := a.newConfiguredSession(cfg, logger, runCtx, a.stdout, a.stderr)
+				if err != nil {
+					resultCh <- taskResult{err: err}
+					return
+				}
+
+				result, shouldExit, err := currentSession.runLine(commandLine, lineRunOptions{
+					allowBuiltins: false,
+					mode:          "shell",
+				})
+				if shouldExit {
+					err = errors.New("psh: parallel shell worker unexpectedly requested session exit")
+				}
+				resultCh <- taskResult{
+					summary:  currentSession.summary(),
+					exitCode: result.ExitCode,
+					err:      err,
+				}
+
+				if err != nil || (cfg.FailOnError && result.ExitCode != 0) {
+					cancelRun()
+					return
+				}
+			}
+		}()
+	}
+
+	go func() {
+		defer close(commandCh)
+		for _, command := range commands {
+			if runCtx.Err() != nil {
+				return
+			}
+			commandCh <- command
+		}
+	}()
+
+	go func() {
+		workers.Wait()
+		close(resultCh)
+	}()
+
+	summary := sessionSummary{}
+	lastExitCode := 0
+	for result := range resultCh {
+		if result.err != nil {
+			return summary, 0, result.err
+		}
+		summary.CommandCount += result.summary.CommandCount
+		summary.FailureCount += result.summary.FailureCount
+		lastExitCode = result.exitCode
+		if cfg.FailOnError && result.exitCode != 0 {
+			lastExitCode = result.exitCode
+		}
+	}
+
+	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+		return summary, timeoutExitCode, nil
+	}
+
+	return summary, lastExitCode, nil
+}
+
 func (a *App) runReplay(cfg config) (int, error) {
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+	if cfg.SessionTimeout > 0 {
+		runCtx, cancelRun = context.WithTimeout(context.Background(), cfg.SessionTimeout)
+		defer cancelRun()
+	}
+
 	traces := make([]replayTrace, 0, len(cfg.ReplayFiles)+1)
 	for _, path := range cfg.ReplayFiles {
 		trace, err := loadReplayTrace(path)
@@ -200,7 +334,7 @@ func (a *App) runReplay(cfg config) (int, error) {
 		return 1, err
 	}
 
-	summary, err := replaySequence(traces[0], cfg, replayPath)
+	summary, err := replaySequence(runCtx, traces[0], cfg, replayPath)
 	if err != nil {
 		return 1, err
 	}
@@ -215,6 +349,24 @@ func (a *App) runReplay(cfg config) (int, error) {
 	a.printRunSummary(summary)
 
 	return summary.ExitCode, nil
+}
+
+func startsWithBuiltin(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	switch {
+	case trimmed == "pwd":
+		return true
+	case trimmed == "cd" || strings.HasPrefix(trimmed, "cd "):
+		return true
+	case strings.HasPrefix(trimmed, "export "):
+		return true
+	case strings.HasPrefix(trimmed, "unset "):
+		return true
+	case trimmed == "exit", trimmed == "quit", strings.HasPrefix(trimmed, "exit "), strings.HasPrefix(trimmed, "quit "):
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *App) printRunSummary(summary runSummary) {

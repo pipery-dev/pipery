@@ -3,6 +3,7 @@ package pipery
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -190,7 +191,7 @@ func replayLogPath(cfg config, templatePath string) (string, error) {
 	return nextReplayLogPath(templatePath)
 }
 
-func replaySequence(template replayTrace, cfg config, logPath string) (runSummary, error) {
+func replaySequence(runCtx context.Context, template replayTrace, cfg config, logPath string) (runSummary, error) {
 	sinks, err := buildReplaySinks(logPath)
 	if err != nil {
 		return runSummary{}, err
@@ -222,6 +223,9 @@ func replaySequence(template replayTrace, cfg config, logPath string) (runSummar
 			MaxCaptureBytes: cfg.MaxCaptureBytes,
 			Prompt:          cfg.Prompt,
 			FailOnError:     cfg.FailOnError,
+			RetryCount:      cfg.RetryCount,
+			CommandTimeout:  cfg.CommandTimeout,
+			Context:         runCtx,
 		})
 		if err != nil {
 			return runSummary{}, err
@@ -250,6 +254,10 @@ func replaySequence(template replayTrace, cfg config, logPath string) (runSummar
 		lastExitCode = result.ExitCode
 		if result.ExitCode != 0 {
 			failureCount++
+		}
+		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+			lastExitCode = timeoutExitCode
+			break
 		}
 		if cfg.FailOnError && result.ExitCode != 0 {
 			break

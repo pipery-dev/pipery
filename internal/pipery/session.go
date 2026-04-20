@@ -2,6 +2,7 @@ package pipery
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -31,6 +32,9 @@ type session struct {
 	maxCaptureBytes int
 	prompt          string
 	failOnError     bool
+	retryCount      int
+	commandTimeout  time.Duration
+	ctx             context.Context
 	commandCount    int
 	failureCount    int
 }
@@ -59,6 +63,9 @@ type sessionConfig struct {
 	MaxCaptureBytes int
 	Prompt          string
 	FailOnError     bool
+	RetryCount      int
+	CommandTimeout  time.Duration
+	Context         context.Context
 }
 
 // newSession builds a session and fills in sensible defaults.
@@ -83,6 +90,9 @@ func newSession(cfg sessionConfig) (*session, error) {
 		maxCaptureBytes: cfg.MaxCaptureBytes,
 		prompt:          cfg.Prompt,
 		failOnError:     cfg.FailOnError,
+		retryCount:      cfg.RetryCount,
+		commandTimeout:  cfg.CommandTimeout,
+		ctx:             defaultContext(cfg.Context),
 	}, nil
 }
 
@@ -234,6 +244,30 @@ func (s *session) runLine(line string, opts lineRunOptions) (executionResult, bo
 		return executionResult{ExitCode: 0}, false, nil
 	}
 
+	if err := s.ctx.Err(); err != nil {
+		return executionResult{ExitCode: timeoutExitCode}, false, nil
+	}
+
+	var lastResult executionResult
+	var shouldExit bool
+
+	for attempt := 0; attempt <= s.retryCount; attempt++ {
+		result, exitSession, err := s.runLineAttempt(trimmed, opts)
+		if err != nil {
+			return executionResult{}, false, err
+		}
+
+		lastResult = result
+		shouldExit = exitSession
+		if shouldExit || result.ExitCode == 0 || s.ctx.Err() != nil {
+			return result, shouldExit, nil
+		}
+	}
+
+	return lastResult, shouldExit, nil
+}
+
+func (s *session) runLineAttempt(trimmed string, opts lineRunOptions) (executionResult, bool, error) {
 	if opts.allowBuiltins {
 		// Built-ins run inside psh itself because they need to mutate session
 		// state. For example, an external `cd` process cannot change our cwd.
@@ -256,9 +290,25 @@ func (s *session) runLine(line string, opts lineRunOptions) (executionResult, bo
 // shell. That means argument boundaries are explicit and not re-parsed by a
 // shell.
 func (s *session) runDirectCommand(command string, args []string, input io.Reader, mode string) (executionResult, error) {
-	result, err := s.runExternal(command, args, input, mode, joinCommandLine(command, args))
-	s.recordResult(result)
-	return result, err
+	if err := s.ctx.Err(); err != nil {
+		return executionResult{ExitCode: timeoutExitCode}, nil
+	}
+
+	var lastResult executionResult
+	for attempt := 0; attempt <= s.retryCount; attempt++ {
+		result, err := s.runExternal(command, args, input, mode, joinCommandLine(command, args))
+		s.recordResult(result)
+		if err != nil {
+			return result, err
+		}
+
+		lastResult = result
+		if result.ExitCode == 0 || s.ctx.Err() != nil {
+			return result, nil
+		}
+	}
+
+	return lastResult, nil
 }
 
 // runShellCommand executes one command line through the configured shell.
@@ -275,6 +325,8 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 	startedAt := time.Now()
 	beforeCwd := s.cwd
 	beforeEnv := mapToSortedEnvSlice(s.env)
+	commandCtx, cancel := s.commandContext()
+	defer cancel()
 
 	// These capped buffers let us keep useful log data without risking unlimited
 	// memory usage for very chatty commands.
@@ -282,7 +334,7 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 	stderrCapture := newCappedBuffer(s.maxCaptureBytes)
 	stdinCapture := newCappedBuffer(s.maxCaptureBytes)
 
-	cmd := exec.Command(command, args...)
+	cmd := exec.CommandContext(commandCtx, command, args...)
 	cmd.Dir = s.cwd
 	cmd.Env = mapToSortedEnvSlice(s.env)
 
@@ -344,7 +396,13 @@ func (s *session) runExternal(command string, args []string, input io.Reader, mo
 	waitErr := cmd.Wait()
 	finishedAt := time.Now()
 	exitCode := deriveExitCode(waitErr)
+	if errors.Is(commandCtx.Err(), context.DeadlineExceeded) {
+		exitCode = timeoutExitCode
+	}
 	var errs []string
+	if errors.Is(commandCtx.Err(), context.DeadlineExceeded) {
+		errs = append(errs, timeoutErrorText(s.commandTimeout, s.ctx))
+	}
 	if waitErr != nil && exitCode < 0 {
 		// Exit errors with a real exit code are already represented by exitCode.
 		// We only keep the string form for unusual failures.
@@ -795,6 +853,10 @@ func deriveExitCode(err error) int {
 		return 0
 	}
 
+	if errors.Is(err, context.DeadlineExceeded) {
+		return timeoutExitCode
+	}
+
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
 		return exitErr.ExitCode()
@@ -805,6 +867,32 @@ func deriveExitCode(err error) int {
 	}
 
 	return 1
+}
+
+const timeoutExitCode = 124
+
+func defaultContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
+func (s *session) commandContext() (context.Context, context.CancelFunc) {
+	if s.commandTimeout <= 0 {
+		return context.WithCancel(s.ctx)
+	}
+	return context.WithTimeout(s.ctx, s.commandTimeout)
+}
+
+func timeoutErrorText(commandTimeout time.Duration, sessionCtx context.Context) string {
+	if errors.Is(sessionCtx.Err(), context.DeadlineExceeded) {
+		return "session timed out"
+	}
+	if commandTimeout > 0 {
+		return fmt.Sprintf("command timed out after %s", commandTimeout)
+	}
+	return "command timed out"
 }
 
 // shellArgs returns the correct "execute this command line" arguments for the

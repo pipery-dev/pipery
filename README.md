@@ -8,11 +8,14 @@ It supports:
 
 - Interactive, line-oriented shell mode
 - One-shot shell commands with repeated `-c`
+- Optional parallel execution for independent `-c` commands
 - Direct program execution with `--`
+- Configurable retries, per-command timeouts, and whole-session timeouts
+- Replay and comparison of prior `.jsonl` runs
 - Configuration from CLI flags, `PIPERY_*` environment variables, and YAML
 - Async, non-blocking JSON logging to file
 - Async mirroring to network syslog over `udp://` or `tcp://`
-- Exit code, execution time, environment, stdin, stdout, and stderr capture
+- Exit code, execution time, resource metrics, environment, stdin, stdout, and stderr capture
 
 ## Build
 
@@ -55,6 +58,10 @@ Run shell commands:
 ```bash
 ./psh -c "echo hello"
 ./psh -c "cd /tmp" -c "pwd"
+./psh -parallelism 3 -c "sleep 1" -c "sleep 1" -c "sleep 1"
+./psh -retry-count 2 -c "make flaky-target"
+./psh -command-timeout 30s -c "go test ./..."
+./psh -session-timeout 5m -c "build-step-1" -c "build-step-2"
 ```
 
 Run a program directly:
@@ -93,6 +100,14 @@ Pipe stdin through a single command and capture it:
 printf 'hello\n' | ./psh -c "cat"
 ```
 
+Replay and compare prior runs:
+
+```bash
+./psh -replay ./psh.jsonl
+./psh -replay ./run1.jsonl -replay ./run2.jsonl
+./psh -replay ./psh.jsonl -replay-log-file ./replayed.jsonl
+```
+
 Use a YAML config file:
 
 ```bash
@@ -127,10 +142,14 @@ Example `./.pipery/config.yaml`:
 log_file: ./psh.jsonl
 syslog: udp://127.0.0.1:514
 syslog_tag: psh
+parallelism: 1
+retry_count: 0
 queue_size: 256
 max_capture_bytes: 262144
 shell: /bin/zsh
 prompt: "psh> "
+command_timeout: 0s
+session_timeout: 0s
 flush_timeout: 3s
 fail_on_error: false
 secret_names:
@@ -144,13 +163,19 @@ secret_suffixes:
 Supported environment variables:
 
 - `PIPERY_LOG_FILE`
+- `PIPERY_REPLAY_LOG_FILE`
+- `PIPERY_REPLAY_FILES`
 - `PIPERY_SYSLOG`
 - `PIPERY_SYSLOG_TAG`
+- `PIPERY_PARALLELISM`
+- `PIPERY_RETRY_COUNT`
 - `PIPERY_QUEUE_SIZE`
 - `PIPERY_MAX_CAPTURE_BYTES`
 - `PIPERY_SHELL`
 - `PIPERY_PROMPT`
 - `PIPERY_FAIL_ON_ERROR`
+- `PIPERY_COMMAND_TIMEOUT`
+- `PIPERY_SESSION_TIMEOUT`
 - `PIPERY_FLUSH_TIMEOUT`
 - `PIPERY_SECRET_NAMES`
 - `PIPERY_SECRET_PREFIXES`
@@ -169,6 +194,8 @@ The REPL is line-oriented rather than a full PTY shell. These built-ins persist 
 
 All other lines are executed through the configured shell, which defaults to `$SHELL` or `/bin/sh`.
 
+When `parallelism` is greater than `1`, repeated `-c` commands are executed in isolated sessions. That means built-ins like `cd` and `export` are intentionally not supported in parallel `-c` mode because they rely on shared mutable shell state.
+
 ## Logging behavior
 
 Logs are written asynchronously through a bounded queue so command completion is not blocked by file or syslog writes.
@@ -181,6 +208,9 @@ Logs are written asynchronously through a bounded queue so command completion is
 - Secret env vars are masked automatically, and you can extend the matcher set with exact names, prefixes, and suffixes
 - In GitHub Actions, repository and shared organization secret names can also be discovered via the Actions secrets API; `psh` still never receives secret values from GitHub, only names, and uses matching env vars to scrub captured outputs
 - Set `fail_on_error` or `-fail-on-error` to stop after the first non-zero command result, similar to shell errexit behavior for batch runs
+- Each log entry includes resource metadata such as CPU core count, total system memory, process CPU time, and peak RSS
+- Replay mode writes a fresh log to `-replay-log-file` or automatically creates `<input>.N` beside the source log
+- The replay engine validates input logs against the current pipery field expectations before rerunning them
 
 ## Repository docs
 
@@ -195,14 +225,20 @@ Logs are written asynchronously through a bounded queue so command completion is
 ```text
 -config             YAML config file path
 -c                  run a shell command; repeat to run multiple commands
+-replay             replay and compare a prior JSONL log; repeat to compare multiple runs
 -log-file           JSONL log file path, default: ./psh.jsonl
+-replay-log-file    JSONL log file path written by replay mode
 -syslog             syslog target, for example udp://127.0.0.1:514
 -syslog-tag         syslog app tag, default: psh
+-parallelism        max number of -c commands to run in parallel, default: 1
+-retry-count        number of retry attempts for a failed command, default: 0
 -queue-size         async log queue size, default: 256
 -max-capture-bytes  max bytes recorded for stdin/stdout/stderr, default: 262144
 -shell              shell path used for -c and REPL execution
 -prompt             interactive prompt, default: psh>
 -fail-on-error      stop the session when a command exits non-zero
+-command-timeout    max runtime for one command, default: 0s (disabled)
+-session-timeout    max runtime for the whole session, default: 0s (disabled)
 -flush-timeout      max time to wait for async log flush on exit, default: 3s
 -secret-names       comma-separated env var names to always mask in logs
 -secret-prefixes    comma-separated env var prefixes to mask in logs
@@ -225,12 +261,19 @@ Example:
   "finished_at": "2026-04-14T11:42:30.123456Z",
   "duration": "23.456ms",
   "duration_ms": 23,
+  "system_cpu_cores": 10,
+  "system_memory_bytes": 17179869184,
+  "process_user_cpu_ms": 4,
+  "process_system_cpu_ms": 2,
+  "process_max_rss_bytes": 7340032,
   "mode": "shell",
   "builtin": false,
   "command": "/bin/zsh",
   "args": ["-lc", "echo hello"],
   "raw_command": "echo hello",
+  "before_cwd": "/tmp",
   "cwd": "/tmp",
+  "before_env": ["PATH=/usr/bin:/bin", "USER=hamed"],
   "env": ["PATH=/usr/bin:/bin", "USER=hamed"],
   "stdin": "",
   "stdout": "hello\n",
@@ -248,4 +291,6 @@ Example:
 - With no command arguments, piped stdin is treated as a line-by-line command source
 - Stdout and stderr are streamed to the terminal while also being captured for logging
 - Stdin capture is supported for direct execution and a single `-c` command when stdin is piped or redirected
+- Parallel `-c` mode is intended for independent tasks and does not preserve shared shell built-in state across commands
+- Commands that time out exit with code `124`
 - The tool intentionally avoids blocking on log delivery; file or syslog failures are reported to stderr

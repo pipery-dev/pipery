@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAppRunExecutesCommandsFromPipedStdin(t *testing.T) {
@@ -215,4 +216,206 @@ func TestAppRunFailOnErrorStopsAfterFirstFailure(t *testing.T) {
 	if exitCode, ok := entries[1]["exit_code"].(float64); !ok || int(exitCode) != 7 {
 		t.Fatalf("expected second exit_code to be 7, got %#v", entries[1]["exit_code"])
 	}
+}
+
+func TestAppRunRetriesFailedCommand(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "pipery.jsonl")
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd returned error: %v", err)
+	}
+	defer func() {
+		if chdirErr := os.Chdir(oldWD); chdirErr != nil {
+			t.Fatalf("failed to restore cwd: %v", chdirErr)
+		}
+	}()
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("Chdir returned error: %v", err)
+	}
+
+	app := NewApp(strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
+	exitCode, err := app.Run([]string{
+		"-log-file", logPath,
+		"-retry-count", "1",
+		"-c", "if [ ! -f retry.ok ]; then touch retry.ok; exit 7; fi",
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0 after retry, got %d", exitCode)
+	}
+
+	entries := readLogEntries(t, logPath)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 log entries for one retry, got %d", len(entries))
+	}
+	if exitCode, ok := entries[0]["exit_code"].(float64); !ok || int(exitCode) != 7 {
+		t.Fatalf("expected first exit_code to be 7, got %#v", entries[0]["exit_code"])
+	}
+	if exitCode, ok := entries[1]["exit_code"].(float64); !ok || int(exitCode) != 0 {
+		t.Fatalf("expected second exit_code to be 0, got %#v", entries[1]["exit_code"])
+	}
+}
+
+func TestAppRunCommandTimeoutStopsCommand(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "pipery.jsonl")
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd returned error: %v", err)
+	}
+	defer func() {
+		if chdirErr := os.Chdir(oldWD); chdirErr != nil {
+			t.Fatalf("failed to restore cwd: %v", chdirErr)
+		}
+	}()
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("Chdir returned error: %v", err)
+	}
+
+	stderr := &bytes.Buffer{}
+	app := NewApp(strings.NewReader(""), &bytes.Buffer{}, stderr)
+	exitCode, err := app.Run([]string{
+		"-log-file", logPath,
+		"-command-timeout", "50ms",
+		"-c", "sleep 1",
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if exitCode != timeoutExitCode {
+		t.Fatalf("expected timeout exit code %d, got %d", timeoutExitCode, exitCode)
+	}
+
+	entries := readLogEntries(t, logPath)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 log entry, got %d", len(entries))
+	}
+	if exitCode, ok := entries[0]["exit_code"].(float64); !ok || int(exitCode) != timeoutExitCode {
+		t.Fatalf("expected timed out exit code %d, got %#v", timeoutExitCode, entries[0]["exit_code"])
+	}
+	if got := stderr.String(); !strings.Contains(got, "exit_code=124") {
+		t.Fatalf("expected timeout summary in stderr, got %q", got)
+	}
+}
+
+func TestAppRunSessionTimeoutStopsRemainingCommands(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "pipery.jsonl")
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd returned error: %v", err)
+	}
+	defer func() {
+		if chdirErr := os.Chdir(oldWD); chdirErr != nil {
+			t.Fatalf("failed to restore cwd: %v", chdirErr)
+		}
+	}()
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("Chdir returned error: %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	app := NewApp(strings.NewReader(""), stdout, stderr)
+	exitCode, err := app.Run([]string{
+		"-log-file", logPath,
+		"-session-timeout", "100ms",
+		"-c", "sleep 1",
+		"-c", "printf 'after\\n'",
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if exitCode != timeoutExitCode {
+		t.Fatalf("expected session timeout exit code %d, got %d", timeoutExitCode, exitCode)
+	}
+	if got := stdout.String(); got != "" {
+		t.Fatalf("expected second command not to run, got stdout %q", got)
+	}
+
+	entries := readLogEntries(t, logPath)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 log entry before session timeout stopped the run, got %d", len(entries))
+	}
+	if got := stderr.String(); !strings.Contains(got, "commands=1 failed=1 exit_code=124") {
+		t.Fatalf("expected session timeout summary in stderr, got %q", got)
+	}
+}
+
+func TestAppRunParallelShellCommands(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "pipery.jsonl")
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd returned error: %v", err)
+	}
+	defer func() {
+		if chdirErr := os.Chdir(oldWD); chdirErr != nil {
+			t.Fatalf("failed to restore cwd: %v", chdirErr)
+		}
+	}()
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("Chdir returned error: %v", err)
+	}
+
+	startedAt := time.Now()
+	app := NewApp(os.Stdin, &bytes.Buffer{}, &bytes.Buffer{})
+	exitCode, err := app.Run([]string{
+		"-log-file", logPath,
+		"-parallelism", "3",
+		"-c", "sleep 0.3",
+		"-c", "sleep 0.3",
+		"-c", "sleep 0.3",
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", exitCode)
+	}
+
+	if elapsed := time.Since(startedAt); elapsed >= 650*time.Millisecond {
+		t.Fatalf("expected parallel run to finish faster than sequential execution, got %s", elapsed)
+	}
+
+	entries := readLogEntries(t, logPath)
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 log entries for the parallel commands, got %d", len(entries))
+	}
+}
+
+func readLogEntries(t *testing.T, logPath string) []map[string]any {
+	t.Helper()
+
+	file, err := os.Open(logPath)
+	if err != nil {
+		t.Fatalf("Open returned error: %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var entries []map[string]any
+	for scanner.Scan() {
+		var entry map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			t.Fatalf("failed to unmarshal log entry: %v", err)
+		}
+		entries = append(entries, entry)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scanner returned error: %v", err)
+	}
+
+	return entries
 }
