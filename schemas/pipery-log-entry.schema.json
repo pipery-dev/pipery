@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pipery-dev/pipery/blob/main/schemas/pipery-log-entry.schema.json",
+  "title": "pipery Log Entry",
+  "description": "JSON Schema for a single JSON object line within a pipery .jsonl log file. Apply this schema to each non-empty line independently.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "timestamp",
+    "started_at",
+    "finished_at",
+    "duration",
+    "duration_ms",
+    "mode",
+    "builtin",
+    "command",
+    "raw_command",
+    "cwd",
+    "env",
+    "exit_code"
+  ],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Time when the log entry was recorded."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Command start time."
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Command finish time."
+    },
+    "duration": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable Go duration string."
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Wall-clock duration in milliseconds."
+    },
+    "system_cpu_cores": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Logical CPU core count for the host that ran the command."
+    },
+    "system_memory_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Total visible system memory in bytes."
+    },
+    "process_user_cpu_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "User CPU time consumed by the process in milliseconds."
+    },
+    "process_system_cpu_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Kernel/system CPU time consumed by the process in milliseconds."
+    },
+    "process_max_rss_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Maximum resident set size observed for the process, normalized to bytes."
+    },
+    "mode": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Execution mode such as interactive, stdin, shell, direct, or replay."
+    },
+    "builtin": {
+      "type": "boolean",
+      "description": "Whether the command was handled internally by pipery."
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Executed program name or builtin name."
+    },
+    "args": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Argument vector captured for direct commands and builtins when available."
+    },
+    "raw_command": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Original shell command text after redaction."
+    },
+    "before_cwd": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Working directory before command execution."
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Working directory after command execution."
+    },
+    "before_env": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/envAssignment"
+      },
+      "description": "Environment visible before command execution."
+    },
+    "env": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/envAssignment"
+      },
+      "description": "Environment captured after command execution."
+    },
+    "stdin": {
+      "type": "string",
+      "description": "Captured stdin content, possibly truncated."
+    },
+    "stdin_truncated": {
+      "type": "boolean",
+      "description": "Whether stdin capture was truncated."
+    },
+    "stdout": {
+      "type": "string",
+      "description": "Captured stdout content, possibly truncated."
+    },
+    "stdout_truncated": {
+      "type": "boolean",
+      "description": "Whether stdout capture was truncated."
+    },
+    "stderr": {
+      "type": "string",
+      "description": "Captured stderr content, possibly truncated."
+    },
+    "stderr_truncated": {
+      "type": "boolean",
+      "description": "Whether stderr capture was truncated."
+    },
+    "exit_code": {
+      "type": "integer",
+      "description": "Exit code returned by the process or builtin."
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Process ID for external commands when available."
+    },
+    "error": {
+      "type": "string",
+      "description": "Optional execution or logging-related error text after redaction."
+    }
+  },
+  "$defs": {
+    "envAssignment": {
+      "type": "string",
+      "pattern": "^[^=]+=.*$",
+      "description": "Environment variable assignment in KEY=VALUE form."
+    }
+  }
+}

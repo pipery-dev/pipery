@@ -211,7 +211,12 @@ Logs are written asynchronously through a bounded queue so command completion is
 
 ## Log format
 
-Each command produces one JSON object per line. Example:
+Each command produces one JSON object per line.
+
+The schema for each `.jsonl` entry lives at [schemas/pipery-log-entry.schema.json](schemas/pipery-log-entry.schema.json).
+Apply that schema to each non-empty line independently.
+
+Example:
 
 ```json
 {
