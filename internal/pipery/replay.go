@@ -120,9 +120,7 @@ func decodeReplayEntry(line []byte) (logEntry, error) {
 	if entry.Cwd == "" {
 		return logEntry{}, errors.New("cwd must be non-empty")
 	}
-	if len(entry.Env) == 0 {
-		return logEntry{}, errors.New("env must contain at least one variable")
-	}
+	for _, item := range entry.Env {
 	for _, item := range entry.Env {
 		if !strings.Contains(item, "=") {
 			return logEntry{}, fmt.Errorf("env item %q must have KEY=VALUE format", item)
